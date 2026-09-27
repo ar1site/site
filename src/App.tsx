@@ -92,7 +92,7 @@ function useAnalyticsAndSchema() {
 }
 
 function Logo({ compact = false }: { compact?: boolean }) {
-  return <img className={compact ? "logo compact" : "logo"} src="/media/ar1-logo.png" alt="AR1 Studios" />;
+  return <img className={compact ? "logo compact" : "logo"} src="/media/ar1-films-logo.png" alt="AR1 Films" />;
 }
 
 function Header() {
@@ -336,7 +336,7 @@ function VisualCarousel() {
           <div><p className="eyebrow">Imagens para entender a operação</p><h2 id="visual-chapter-title">Mais espaço para ver. Mais contexto para decidir.</h2></div>
           <p>Uma leitura visual das frentes que a AR1 organiza — da produção em campo à implantação de estúdios.</p>
         </Reveal>
-        <div className="visual-carousel" role="region" aria-roledescription="carrossel" aria-label="Capacidades visuais da AR1 Studios">
+        <div className="visual-carousel" role="region" aria-roledescription="carrossel" aria-label="Capacidades visuais da AR1 Films">
           <div id="visual-story-panel" className="visual-carousel-stage" role="tabpanel" tabIndex={0} aria-label={story.label}>
             {visualStories.map((item, index) => <img className={index === active ? "active" : ""} key={item.image} src={item.image} alt={index === active ? item.alt : ""} loading={index === 0 ? "eager" : "lazy"} aria-hidden={index !== active} />)}
             <div className="visual-carousel-scrim" />
@@ -354,7 +354,7 @@ function VisualCarousel() {
           </div>
           <div className="visual-carousel-nav">
             <div className="visual-carousel-nav-copy"><span>Explore as frentes</span><p>Selecione uma cena para ver a imagem e conhecer os detalhes.</p></div>
-            <div className="visual-carousel-thumbs" role="tablist" aria-label="Selecionar uma frente da AR1 Studios">
+            <div className="visual-carousel-thumbs" role="tablist" aria-label="Selecionar uma frente da AR1 Films">
               {visualStories.map((item, index) => (
                 <button className={index === active ? "active" : ""} type="button" role="tab" key={item.image} onClick={() => selectStory(index, "miniatura")} aria-label={`Ver detalhes de ${item.label}`} aria-selected={index === active} aria-controls="visual-story-panel">
                   <span className="visual-thumb-media"><img src={item.image} alt="" loading="lazy" /><b>{String(index + 1).padStart(2, "0")}</b></span>
@@ -462,15 +462,15 @@ function ComplementaryCapabilities() {
 }
 
 function Home() {
-  usePageMeta("AR1 Studios | Produção audiovisual, locação e transmissões em Goiânia", "Locação de grande escala no Haras SOBI (+20 cenários, área coberta para 4 mil pessoas), transmissão de leilões, estúdios de podcast e filmes de legado. Goiânia - GO.");
+  usePageMeta("AR1 Films | Produção audiovisual, locação e transmissões em Goiânia", "Locação de grande escala no Haras SOBI (+20 cenários, área coberta para 4 mil pessoas), transmissão de leilões, estúdios de podcast e filmes de legado. Goiânia - GO.");
   const queryProject = new URLSearchParams(window.location.search).get("projeto") ?? "";
 
   return (
     <><Header /><main id="conteudo">
       <section className="home-hero">
         <picture className="home-hero-media">
-          <source media="(max-width: 700px)" srcSet="/media/ar1-fachada-2026-v1-mobile.webp" />
-          <img src="/media/ar1-fachada-2026-v1.webp" alt="Fachada iluminada da AR1 Studios" fetchPriority="high" />
+          <source media="(max-width: 700px)" srcSet="/media/ar1-films-fachada-2026-v1-mobile.webp" />
+          <img src="/media/ar1-films-fachada-2026-v1.webp" alt="Fachada iluminada da AR1 Films" fetchPriority="high" />
         </picture>
         <div className="image-overlay" />
         <div className="home-hero-copy page-shell"><p className="eyebrow">Produção audiovisual · Goiânia - GO</p><h1>Produção de conteúdo,<br /><span>podcast, transmissão<br />e cenários únicos.</span></h1><p>De Goiânia para o Brasil: uma equipe para gravar, transmitir e entregar projetos que pedem estrutura.</p><div className="hero-actions"><a className="button primary" href="#contato" onClick={() => trackEvent("cta_primary_click", { page: "/" })}>Solicitar proposta</a><a className="button ghost" href="/haras-sobi">Ver o Haras SOBI</a></div><p className="hero-proof">+20 cenários · 4 mil pessoas · Pista de laço</p></div>
@@ -506,7 +506,7 @@ function Home() {
 }
 
 function SolutionsPage() {
-  usePageMeta("Soluções | AR1 Studios", "Produzimos para você, montamos a estrutura para a sua equipe produzir, ou os dois.");
+  usePageMeta("Soluções | AR1 Films", "Produzimos para você, montamos a estrutura para a sua equipe produzir, ou os dois.");
   return <><Header /><main id="conteudo">
     <PageHero eyebrow="Soluções AR1" title="Produzimos para você, montamos a estrutura para a sua equipe produzir, ou os dois." summary="Escolha pelo problema, não pelo equipamento. Aqui estão as ofertas e as capacidades que entram em cada projeto." image="/media/edit-suite.webp" secondaryHref="/haras-sobi" secondaryCta="Ver o Haras SOBI" breadcrumbs={[{ label: "Soluções" }]} />
     <section id="familias" className="page-section section-light"><div className="page-shell"><Reveal><p className="eyebrow">Arquitetura comercial</p><h2>Escolha pelo desafio, não pelo equipamento.</h2></Reveal><FamilyCards expanded /></div></section>
@@ -528,7 +528,7 @@ function PodcastGallery() {
 }
 
 function PodcastPage() {
-  usePageMeta("Gravação de podcast e transmissão ao vivo | AR1 Studios · Goiânia e todo o Brasil", "Mais de 4 mil episódios gravados com influenciadores, artistas, políticos e criadores. Gravado e editado até a postagem ou ao vivo. Estúdio montado em qualquer lugar do Brasil.");
+  usePageMeta("Gravação de podcast e transmissão ao vivo | AR1 Films · Goiânia e todo o Brasil", "Mais de 4 mil episódios gravados com influenciadores, artistas, políticos e criadores. Gravado e editado até a postagem ou ao vivo. Estúdio montado em qualquer lugar do Brasil.");
   const paths = [["Gravado e editado", "Você grava. Nós sincronizamos o áudio, colorimos a imagem, editamos, cortamos os melhores momentos, renderizamos e deixamos pronto para postar.", ["Sincronização de áudio", "Colorização", "Edição completa", "Cortes para redes", "Renderização", "Postagem opcional"]], ["Ao vivo", "Transmissão dirigida em tempo real, com troca de câmeras, inserção de telas e gravação simultânea para reaproveitar depois.", ["Direção ao vivo", "Multicâmera", "Inserção de telas e vinhetas", "Gravação simultânea", "Cortes depois da live"]]] as const;
   const audience = [["Quem está começando", "Você chega com o tema. A gente cuida de câmera, luz, som e edição, e orienta o formato."], ["Criadores e influenciadores", "Cadência e qualidade para manter a audiência: gravação em série, cortes para redes e entrega no prazo."], ["Artistas, políticos e personalidades", "Agenda apertada, imagem cuidada: gravação eficiente, direção de entrevista e material aprovado antes de sair."], ["Empresas e instituições", "Podcast corporativo, conversas com especialistas e conteúdo para clientes, com equipe e rotina que cabem na empresa."]] as const;
   const steps = [["01", "Briefing", "Tema, formato, convidados e onde publicar."], ["02", "Agenda", "Data no estúdio, no Haras SOBI ou no seu evento."], ["03", "Gravação ou live", "Equipe, câmeras, luz e som com direção."], ["04", "Pós-produção", "Sincronização, colorização, edição, cortes e renderização."], ["05", "Entrega e postagem", "Arquivo final e, se quiser, publicação nas suas plataformas."]] as const;
@@ -536,7 +536,7 @@ function PodcastPage() {
 }
 
 function ConsultingPage() {
-  usePageMeta("Consultoria de estúdio de podcast | Projeto, implantação e treinamento", "Do diagnóstico ao treinamento da equipe: seu estúdio nasce funcionando. AR1 Studios, Goiânia - GO.");
+  usePageMeta("Consultoria de estúdio de podcast | Projeto, implantação e treinamento", "Do diagnóstico ao treinamento da equipe: seu estúdio nasce funcionando. AR1 Films, Goiânia - GO.");
   return (
     <><Header /><main id="conteudo" className="consulting-page">
       <PageHero eyebrow="Consultoria de estúdio · projeto e implantação" title="Seu estúdio precisa funcionar depois da inauguração. Não só na foto." summary="Antes de comprar equipamento, definimos para que o estúdio serve, quem opera e com que rotina. Depois projetamos, implantamos, testamos e treinamos a sua equipe." image="/media/consultoria-hero-estudio-v1.webp" secondaryHref="#diagnostico" secondaryCta="Ver as 5 etapas" breadcrumbs={[{ label: "Soluções", href: "/solucoes" }, { label: "Consultoria de estúdio" }]} />
@@ -547,7 +547,7 @@ function ConsultingPage() {
 
       <section className="consulting-fit section-light"><div className="page-shell"><Reveal><p className="eyebrow">Quando a consultoria faz sentido</p><h2>Quatro pontos de partida. Um diagnóstico próprio.</h2></Reveal><div className="consulting-fit-grid">{podcastConsulting.fits.map(([title, body], index) => <Reveal className="consulting-fit-card" key={title}><span>{String(index + 1).padStart(2, "0")}</span><h3>{title}</h3><p>{body}</p></Reveal>)}</div></div></section>
 
-      <section className="consulting-journey section-dark"><div className="page-shell"><Reveal className="section-heading compact"><div><p className="eyebrow">Jornada consultiva</p><h2>Cinco etapas para reduzir improviso.</h2></div><p>Cada fase termina com decisões claras. O escopo pode parar no projeto ou seguir até implantação, treinamento e acompanhamento.</p></Reveal><ol className="consulting-steps">{podcastConsulting.steps.map(([number, title, body]) => <li className="reveal consulting-step" key={number}><span>{number}</span><div><h3>{title}</h3><p>{body}</p></div></li>)}</ol></div></section>
+      <section className="consulting-journey section-dark"><div className="page-shell"><Reveal className="section-heading compact"><div><p className="eyebrow">Jornada consultiva</p><h2>Cinco etapas para reduzir improviso.</h2></div><p>Cada fase termina com decisões claras. O escopo pode parar no projeto ou seguir até implantação, treinamento e acompanhamento.</p></Reveal><ol className="consulting-steps">{podcastConsulting.steps.map(([number, title, body]) => <li className="consulting-step" key={number}><span>{number}</span><div><h3>{title}</h3><p>{body}</p></div></li>)}</ol></div></section>
 
       <section className="consulting-deliverables section-light"><div className="page-shell split"><Reveal><p className="eyebrow">Entregáveis possíveis</p><h2>O projeto deixa decisões documentadas.</h2><p className="section-intro dark">A proposta define quais entregáveis entram, responsáveis, limites, cronograma e critérios de aceite.</p></Reveal><div className="deliverable-list">{podcastConsulting.deliverables.map((item, index) => <Reveal className="deliverable-row" key={item}><span>{String(index + 1).padStart(2, "0")}</span><p>{item}</p></Reveal>)}</div></div></section>
 
@@ -566,8 +566,8 @@ function MethodPage() {
 }
 
 function AboutPage() {
-  usePageMeta("Sobre a AR1 Studios | Goiânia - GO", "Nascemos no agro de Goiás e aprendemos a produzir onde não dá para errar.");
-  return <><Header /><main id="conteudo"><PageHero eyebrow="Sobre a AR1 Studios · Goiânia - GO" title="Aprendemos a produzir onde não dá para errar." summary="Nascemos em Goiás, dentro do agronegócio: leilões ao vivo, eventos em fazenda e transmissões sem segunda chance. Hoje levamos essa disciplina para empresas, instituições, marcas e projetos culturais, com o Haras SOBI como nossa casa de produção." image="/media/cattle-rays.webp" secondaryHref="/metodo" secondaryCta="Conhecer o método" breadcrumbs={[{ label: "Sobre" }]} /><section className="page-section section-light"><div className="page-shell split"><Reveal><p className="eyebrow">Nossa direção</p><h2>Do campo para uma atuação multissetorial.</h2></Reveal><Reveal className="large-copy"><p>A experiência no agronegócio formou repertório para lidar com território, evento, transmissão, relacionamento e histórias de patrimônio. Essa força sustenta uma atuação com empresas B2B, instituições, marcas e projetos culturais.</p><p>A empresa une produção, consultoria e estrutura, sempre com ofertas e responsabilidades claramente definidas.</p></Reveal></div></section><section className="about-visual section-dark"><div className="page-shell media-split reverse"><img src="/media/event-stage.webp" alt="Estrutura de palco e produção" loading="lazy" /><Reveal><p className="eyebrow">Uma marca, várias frentes</p><h2>Estratégia, estrutura e execução sob a mesma direção.</h2><p>A AR1 não cria uma submarca para cada serviço. Conteúdo recorrente, estúdios, transmissões, filmes e Haras SOBI pertencem à mesma proposta de valor: fazer a mídia funcionar dentro de um objetivo real.</p></Reveal></div></section><section className="page-section section-light"><div className="page-shell"><Reveal><p className="eyebrow">Compromissos</p><h2>Como queremos trabalhar.</h2></Reveal><div className="commitment-grid"><article><span>01</span><h3>Escopo claro</h3><p>Entregas, responsabilidades e limites definidos antes da execução.</p></article><article><span>02</span><h3>Estrutura adequada</h3><p>Recursos dimensionados pela necessidade, e não pela aparência.</p></article><article><span>03</span><h3>Presença que permanece</h3><p>Conteúdo organizado para continuar útil depois do momento de produção.</p></article></div></div></section><RelatedJourneys items={relatedJourneys.about} /><ContactSection /></main><Footer /></>;
+  usePageMeta("Sobre a AR1 Films | Goiânia - GO", "Nascemos no agro de Goiás e aprendemos a produzir onde não dá para errar.");
+  return <><Header /><main id="conteudo"><PageHero eyebrow="Sobre a AR1 Films · Goiânia - GO" title="Aprendemos a produzir onde não dá para errar." summary="Nascemos em Goiás, dentro do agronegócio: leilões ao vivo, eventos em fazenda e transmissões sem segunda chance. Hoje levamos essa disciplina para empresas, instituições, marcas e projetos culturais, com o Haras SOBI como nossa casa de produção." image="/media/cattle-rays.webp" secondaryHref="/metodo" secondaryCta="Conhecer o método" breadcrumbs={[{ label: "Sobre" }]} /><section className="page-section section-light"><div className="page-shell split"><Reveal><p className="eyebrow">Nossa direção</p><h2>Do campo para uma atuação multissetorial.</h2></Reveal><Reveal className="large-copy"><p>A experiência no agronegócio formou repertório para lidar com território, evento, transmissão, relacionamento e histórias de patrimônio. Essa força sustenta uma atuação com empresas B2B, instituições, marcas e projetos culturais.</p><p>A empresa une produção, consultoria e estrutura, sempre com ofertas e responsabilidades claramente definidas.</p></Reveal></div></section><section className="about-visual section-dark"><div className="page-shell media-split reverse"><img src="/media/event-stage.webp" alt="Estrutura de palco e produção" loading="lazy" /><Reveal><p className="eyebrow">Uma marca, várias frentes</p><h2>Estratégia, estrutura e execução sob a mesma direção.</h2><p>A AR1 não cria uma submarca para cada serviço. Conteúdo recorrente, estúdios, transmissões, filmes e Haras SOBI pertencem à mesma proposta de valor: fazer a mídia funcionar dentro de um objetivo real.</p></Reveal></div></section><section className="page-section section-light"><div className="page-shell"><Reveal><p className="eyebrow">Compromissos</p><h2>Como queremos trabalhar.</h2></Reveal><div className="commitment-grid"><article><span>01</span><h3>Escopo claro</h3><p>Entregas, responsabilidades e limites definidos antes da execução.</p></article><article><span>02</span><h3>Estrutura adequada</h3><p>Recursos dimensionados pela necessidade, e não pela aparência.</p></article><article><span>03</span><h3>Presença que permanece</h3><p>Conteúdo organizado para continuar útil depois do momento de produção.</p></article></div></div></section><RelatedJourneys items={relatedJourneys.about} /><ContactSection /></main><Footer /></>;
 }
 
 function HarasPage() {
@@ -599,7 +599,7 @@ function ProductPage({ type }: { type: "live" | "legacy" }) {
   const live = type === "live";
   const data = live ? {
     pageTitle: "Leilão 360 | Transmissão de leilão ao vivo, aquecimento e pós-evento",
-    description: "Conteúdo de aquecimento, transmissão dirigida e melhores momentos em uma única operação. AR1 Studios, Goiânia - GO.",
+    description: "Conteúdo de aquecimento, transmissão dirigida e melhores momentos em uma única operação. AR1 Films, Goiânia - GO.",
     eyebrow: "Leilão 360",
     title: "O leilão começa antes do primeiro lote e continua depois do último.",
     summary: "Conteúdo de aquecimento, transmissão dirigida e entregas posteriores organizados em uma operação única.",
@@ -611,7 +611,7 @@ function ProductPage({ type }: { type: "live" | "legacy" }) {
     storyImage: "/media/camera-auction.webp",
   } : {
     pageTitle: "Filme de Legado | Documentário de memória empresarial e familiar",
-    description: "Pesquisa, entrevistas e direção para preservar a história de empresas, famílias e territórios. AR1 Studios.",
+    description: "Pesquisa, entrevistas e direção para preservar a história de empresas, famílias e territórios. AR1 Films.",
     eyebrow: "Filme de Legado",
     title: "Histórias importantes não podem depender apenas da memória.",
     summary: "Pesquisa, roteiro e produção audiovisual para preservar patrimônio, identidade e visão através das gerações.",
@@ -623,12 +623,12 @@ function ProductPage({ type }: { type: "live" | "legacy" }) {
     storyImage: "/media/cattle-wide.webp",
   };
   usePageMeta(data.pageTitle, data.description);
-  return <><Header /><main id="conteudo"><PageHero eyebrow={data.eyebrow} title={data.title} summary={data.summary} image={data.image} breadcrumbs={[{ label: "Soluções", href: "/solucoes" }, { label: data.eyebrow }]} /><section className="product-value section-light"><div className="page-shell"><Reveal><p className="eyebrow">O que organiza</p><h2>Uma entrega pensada como ativo.</h2></Reveal><div className="value-grid">{data.points.map((point, index) => <Reveal className="value-card" key={point}><span>{String(index + 1).padStart(2, "0")}</span><p>{point}</p></Reveal>)}</div></div></section><section className="product-story section-dark"><div className="page-shell media-split"><img src={data.storyImage} alt="Produção AR1 Studios" loading="lazy" /><Reveal><p className="eyebrow">Visão do projeto</p><h2>{data.storyTitle}</h2><p>{data.story}</p></Reveal></div></section><RelatedJourneys items={live ? relatedJourneys.live : relatedJourneys.legacy} /><ContactSection defaultProject={data.project} /></main><Footer /></>;
+  return <><Header /><main id="conteudo"><PageHero eyebrow={data.eyebrow} title={data.title} summary={data.summary} image={data.image} breadcrumbs={[{ label: "Soluções", href: "/solucoes" }, { label: data.eyebrow }]} /><section className="product-value section-light"><div className="page-shell"><Reveal><p className="eyebrow">O que organiza</p><h2>Uma entrega pensada como ativo.</h2></Reveal><div className="value-grid">{data.points.map((point, index) => <Reveal className="value-card" key={point}><span>{String(index + 1).padStart(2, "0")}</span><p>{point}</p></Reveal>)}</div></div></section><section className="product-story section-dark"><div className="page-shell media-split"><img src={data.storyImage} alt="Produção AR1 Films" loading="lazy" /><Reveal><p className="eyebrow">Visão do projeto</p><h2>{data.storyTitle}</h2><p>{data.story}</p></Reveal></div></section><RelatedJourneys items={live ? relatedJourneys.live : relatedJourneys.legacy} /><ContactSection defaultProject={data.project} /></main><Footer /></>;
 }
 
 function LegacyServicePage({ slug }: { slug: string }) {
   const data = legacyServiceDetails.find((service) => service.slug === slug);
-  usePageMeta(data ? `${data.title} | AR1 Studios` : "Página não encontrada | AR1 Studios", data?.summary ?? "Este endereço não corresponde a uma página da AR1 Studios.");
+  usePageMeta(data ? `${data.title} | AR1 Films` : "Página não encontrada | AR1 Films", data?.summary ?? "Este endereço não corresponde a uma página da AR1 Films.");
   if (!data) return <NotFound />;
   const related = [
     { label: "Visão completa", title: "Soluções AR1", body: "Entenda como esta capacidade se combina com operação de conteúdo, estrutura e projetos especiais.", href: "/solucoes" },
@@ -644,8 +644,8 @@ function RedirectPage({ to }: { to: string }) {
 }
 
 function NotFound() {
-  usePageMeta("Página não encontrada | AR1 Studios", "Este endereço não corresponde a uma página da AR1 Studios.");
-  return <><Header /><main id="conteudo" className="not-found section-dark"><div className="page-shell"><p className="eyebrow">Página não encontrada</p><h1>Vamos encontrar o próximo caminho.</h1><p>Este endereço não corresponde a uma página da AR1 Studios.</p><a className="button primary" href="/">Voltar ao início</a></div></main><Footer /></>;
+  usePageMeta("Página não encontrada | AR1 Films", "Este endereço não corresponde a uma página da AR1 Films.");
+  return <><Header /><main id="conteudo" className="not-found section-dark"><div className="page-shell"><p className="eyebrow">Página não encontrada</p><h1>Vamos encontrar o próximo caminho.</h1><p>Este endereço não corresponde a uma página da AR1 Films.</p><a className="button primary" href="/">Voltar ao início</a></div></main><Footer /></>;
 }
 
 function App() {

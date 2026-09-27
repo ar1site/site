@@ -2,7 +2,7 @@ import { EMAIL, SITE_NAME, WHATSAPP_E164 } from "./config/site";
 
 export const siteConfig = {
   brand: SITE_NAME,
-  domain: "ar1studios.com.br",
+  domain: "ar1films.com",
   email: EMAIL,
   whatsappNumber: WHATSAPP_E164,
   instagramUrl: "",
@@ -337,7 +337,7 @@ export const legacyServiceDetails = [
   { slug: "podcast-itinerante", eyebrow: "Operar conteúdo", title: "Conteúdo onde as conversas realmente acontecem.", summary: "Estrutura móvel para entrevistas, podcasts e agendas editoriais em empresas, feiras, eventos e locações especiais.", image: "/media/edit-suite.webp", project: "Operação de conteúdo", items: ["Desenho editorial", "Captação de áudio e vídeo", "Operação no local", "Cortes e entregas conforme escopo"] },
   { slug: "eventos-e-conteudo", eyebrow: "Projetos especiais", title: "Conteúdo que faz o evento continuar depois do palco.", summary: "Planejamento e produção para registrar, ativar e prolongar a presença de eventos e marcas.", image: "/media/event-stage.webp", project: "Evento ou projeto especial", items: ["Plano de conteúdo", "Captação de momentos e entrevistas", "Peças de circulação", "Entrega organizada por finalidade"] },
   { slug: "producao-externa", eyebrow: "Haras SOBI e locações", title: "A locação certa também faz parte da narrativa.", summary: "Produções no Haras SOBI e em outras locações avaliadas de acordo com a história, a logística e a escala do projeto.", image: "/media/haras-bosque-2026-v1.webp", project: "Haras SOBI", items: ["Planejamento de locação", "Equipe e logística", "Captação de imagem e som", "Produção dimensionada ao uso"] },
-  { slug: "projetos-integrados", eyebrow: "AR1 Studios", title: "Quando o projeto precisa de mais de uma frente.", summary: "Estratégia, estrutura, audiovisual, transmissão e conteúdo coordenados em uma operação sob medida.", image: "/media/cattle-wide.webp", project: "Ainda preciso entender a melhor solução", items: ["Arquitetura de escopo", "Integração entre frentes", "Cronograma e coordenação", "Entregas por etapa"] },
+  { slug: "projetos-integrados", eyebrow: "AR1 Films", title: "Quando o projeto precisa de mais de uma frente.", summary: "Estratégia, estrutura, audiovisual, transmissão e conteúdo coordenados em uma operação sob medida.", image: "/media/cattle-wide.webp", project: "Ainda preciso entender a melhor solução", items: ["Arquitetura de escopo", "Integração entre frentes", "Cronograma e coordenação", "Entregas por etapa"] },
   { slug: "consultoria-implantacao-estudios-podcast", eyebrow: "Construir capacidade", title: "Implantar um estúdio é construir uma operação.", summary: "Diagnóstico, projeto, ativação e suporte para transformar espaço e equipamentos em uma rotina funcional.", image: "/media/edit-suite.webp", project: "Projeto e ativação de estúdio", items: ["Diagnóstico de uso", "Projeto técnico", "Implantação e testes", "Treinamento e suporte"] },
 ] as const;
 

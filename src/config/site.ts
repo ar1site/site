@@ -1,4 +1,4 @@
-export const SITE_NAME = "AR1 Studios";
+export const SITE_NAME = "AR1 Films";
 export const LEGAL_NAME = "TODO_RAZAO_SOCIAL";
 export const CNPJ = "30.687.924/0001-79";
 export const CITY = "Goiânia - GO";
@@ -6,7 +6,7 @@ export const TAGLINE = "Produção audiovisual, locação e transmissões para p
 export const HARAS_ADDRESS = "Haras SOBI · GO-010, sentido Nerópolis, saída de Goiânia - GO";
 export const STUDIO_ADDRESS = "TODO_ENDERECO_ESTUDIO_GOIANIA";
 export const MAPS_URL = "";
-export const EMAIL = "contato@ar1studios.com.br";
+export const EMAIL = "contato@ar1films.com";
 export const WHATSAPP_DISPLAY = "(62) 9835-4354";
 export const WHATSAPP_E164 = "556298354354";
 export const WHATSAPP_BASE_MESSAGE = "Olá, AR1! Vim pelo site e quero falar sobre";

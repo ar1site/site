@@ -24,7 +24,7 @@ youtubeUrl: "https://youtube.com/...",
 linkedinUrl: "https://linkedin.com/company/...",
 ```
 
-O número deve conter DDI + DDD + telefone, sem `+`, espaços ou traços. Enquanto estiver vazio, o formulário abre um e-mail para `contato@ar1studios.com.br`.
+O número deve conter DDI + DDD + telefone, sem `+`, espaços ou traços. Enquanto estiver vazio, o formulário abre um e-mail para `contato@ar1films.com`.
 
 ## Desenvolvimento local
 
@@ -47,7 +47,7 @@ O projeto já está conectado à Vercel pela branch `main`. Para manutenção no
 - Framework preset: Vite;
 - build: `npm run build`;
 - saída: `dist`;
-- domínio pretendido: `ar1studios.com.br` — confirmar DNS e vinculação antes de divulgar.
+- domínio oficial: `ar1films.com` (sem www como canônico) — em 27/09/2026 o domínio oficial passou de `ar1studios.com.br` para `ar1films.com`, junto com a marca AR1 Films; confirmar DNS e vinculação na Vercel antes de divulgar.
 
 O arquivo `vercel.json` mantém as rotas `/leilao-360` e `/filme-de-legado` funcionando ao abrir diretamente.
 
