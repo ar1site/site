@@ -7,8 +7,8 @@ export const HARAS_ADDRESS = "Haras SOBI · GO-010, sentido Nerópolis, saída d
 export const STUDIO_ADDRESS = "TODO_ENDERECO_ESTUDIO_GOIANIA";
 export const MAPS_URL = "";
 export const EMAIL = "contato@ar1films.com";
-export const WHATSAPP_DISPLAY = "(62) 9835-4354";
-export const WHATSAPP_E164 = "556298354354";
+export const WHATSAPP_DISPLAY = "(62) 98125-2338";
+export const WHATSAPP_E164 = "5562981252338";
 export const WHATSAPP_BASE_MESSAGE = "Olá, AR1! Vim pelo site e quero falar sobre";
 
 // O projeto é Vite; variáveis públicas usam o prefixo VITE_ em vez de NEXT_PUBLIC_.

@@ -82,7 +82,7 @@ function useAnalyticsAndSchema() {
       window.gtag("config", GA4_ID);
     }
     const schema = { "@context": "https://schema.org", "@graph": [
-      { "@type": "LocalBusiness", name: SITE_NAME, ...(LEGAL_NAME.startsWith("TODO") ? {} : { legalName: LEGAL_NAME }), taxID: CNPJ, telephone: "+55 62 9835-4354", email: EMAIL, url: `https://${siteConfig.domain}`, address: { "@type": "PostalAddress", addressLocality: "Goiânia", addressRegion: "GO", addressCountry: "BR" }, areaServed: "BR" },
+      { "@type": "LocalBusiness", name: SITE_NAME, ...(LEGAL_NAME.startsWith("TODO") ? {} : { legalName: LEGAL_NAME }), taxID: CNPJ, telephone: "+55 62 98125-2338", email: EMAIL, url: `https://${siteConfig.domain}`, address: { "@type": "PostalAddress", addressLocality: "Goiânia", addressRegion: "GO", addressCountry: "BR" }, areaServed: "BR" },
       { "@type": "Place", name: "Haras SOBI", description: HARAS_ADDRESS },
     ] };
     let node = document.getElementById("ar1-local-business-schema") as HTMLScriptElement | null;
