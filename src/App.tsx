@@ -377,7 +377,7 @@ function Showreel() {
 function ProofStrip() {
   const entries = [[proof.episodios.display, proof.episodios.label], [proof.shows, "shows e DVDs gravados"], [proof.leiloes, "leilões transmitidos"], [proof.estudios, "estúdios implantados"], [proof.horasAoVivo, "horas de transmissão ao vivo"]].filter(([value]) => value !== "TODO");
   if (entries.length === 0) return null;
-  return <section className="proof-strip section-light"><div className="page-shell"><Reveal><p className="eyebrow">Projetos realizados</p><h2>Só publicamos o que fizemos.</h2><p>Cada número e cada imagem deste site vêm de projetos entregues, com autorização de quem contratou.</p></Reveal><div className="fact-grid light">{entries.map(([value, label]) => <div className="fact-card" key={label}><strong>{value}</strong><span>{label}</span></div>)}</div></div></section>;
+  return <section className="proof-strip section-light"><div className="page-shell"><Reveal><p className="eyebrow">Projetos realizados</p><h2>Experiência que se mede.</h2></Reveal><div className="fact-grid light">{entries.map(([value, label]) => <div className="fact-card" key={label}><strong>{value}</strong><span>{label}</span></div>)}</div></div></section>;
 }
 
 export function EvidenceCases() {
