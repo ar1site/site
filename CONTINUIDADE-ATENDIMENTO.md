@@ -11,10 +11,10 @@ Atualizado em 28/09/2026. Leia isto antes de retomar o trabalho no sistema de at
 - Alessandro pediu que o máximo seja feito de forma autônoma; só ele faz o que exige celular (ler QR), cartão ou identidade.
 
 ## Estado
-- Banco: migrações escritas em `supabase/migrations/20260928100000_ar1_atendimento.sql` (contatos, atendimentos, mensagens, sugestões, configurações, eventos, gatilhos, RLS, realtime) e `20260928110000_ar1_wa_ponte.sql` (fila de envio `ar1_wa_outbox` + bucket privado `ar1-wa-media`). **Ainda não aplicadas**: falta acesso ao banco (token pessoal do Supabase ou senha do banco). Para aplicar sem o proprietário: Management API `POST /v1/projects/{ref}/database/query` com o token, ou `supabase db push`.
-- Vercel: projeto `ar1-atendimento` criado; variáveis enviadas por CLI (conferir com `vercel env ls` numa pasta ligada ao projeto): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `ANTHROPIC_MODEL`, `WHATSAPP_PROVIDER=bridge`, `WEBHOOK_SECRET` (valor em `%LOCALAPPDATA%\SistemaACM\ar1-webhook-secret.txt`). Faltam: `SUPABASE_SERVICE_ROLE_KEY`, `OPENROUTER_API_KEY`, `AI_MODEL`, `AI_PROVIDER=openrouter`.
+- Banco: migrações escritas em `supabase/migrations/20260928100000_ar1_atendimento.sql` (contatos, atendimentos, mensagens, sugestões, configurações, eventos, gatilhos, RLS, realtime) e `20260928110000_ar1_wa_ponte.sql` (fila de envio `ar1_wa_outbox` + bucket privado `ar1-wa-media`). **Aplicadas em 28/09/2026** pela Management API (12 tabelas ar1_* e buckets ar1-client-files/ar1-wa-media conferidos). Cadastro público desligado (disable_signup). Usuários criados: rui@ar1films.com e adm.ar1films@gmail.com (ambos admin em ar1_staff); senhas em `%LOCALAPPDATA%\SistemaACM\ar1-atendimento-acessos.txt`. Service role guardada em `%LOCALAPPDATA%\SistemaACM\ar1-service-role.txt` e na Vercel. O token pessoal do Supabase usado deve ser revogado pelo proprietário.
+- Vercel: projeto `ar1-atendimento` criado; variáveis enviadas por CLI (conferir com `vercel env ls` numa pasta ligada ao projeto): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `ANTHROPIC_MODEL`, `WHATSAPP_PROVIDER=bridge`, `WEBHOOK_SECRET` (valor em `%LOCALAPPDATA%\SistemaACM\ar1-webhook-secret.txt`). Também definidas: `SUPABASE_SERVICE_ROLE_KEY`, `OPENROUTER_API_KEY` (válida, limite US$ 5), `AI_PROVIDER=openrouter`, `AI_MODEL=anthropic/claude-sonnet-5.5`.
 - App: um agente estava construindo `atendimento/` (Next.js) com a especificação da seção abaixo. Se a pasta existir parcialmente, revisar `atendimento/LEIA-ME.md` e o que compila antes de continuar.
-- Ponte local (`atendimento/ponte/`): **não começada**. Docker Desktop estava fechado; Alessandro ia reiniciar o PC para ligá-lo.
+- Ponte local (`atendimento/ponte/`): em construção por agente (compose + ponte.mjs + testes + instalador). Docker Desktop estava fechado; Alessandro ia reiniciar o PC para ligá-lo.
 - Usuários do painel: criar no Supabase (Authentication → Users) para `rui@ar1films.com` e o e-mail de Alessandro; o gatilho da migração torna todo usuário criado membro da equipe (`ar1_staff`). Desligar cadastro público em Authentication → Providers → Email.
 
 ## Contrato da ponte (bridge) ↔ painel
@@ -32,8 +32,8 @@ Webhook do painel: `POST /api/whatsapp/webhook/<WEBHOOK_SECRET>`.
 - Execução: tarefa agendada do Windows `AR1-Ponte-WhatsApp` ao iniciar sessão, reinício automático.
 
 ## Pendências com o proprietário
-1. Token pessoal do Supabase (Account → Access Tokens) **ou** senha do banco — desbloqueia migrações, service role, usuários e ajustes de autenticação.
-2. Chave do OpenRouter (openrouter.ai → Keys) com crédito.
+1. Revogar o token pessoal `claude-ar1` no Supabase (já usado).
+2. OpenRouter: chave aplicada; subir o limite de US$ 5 quando o uso crescer.
 3. Ler o QR com o celular dos Estúdios SOBI quando a ponte subir.
 4. (Opcional) CNAME `atendimento` na Squarespace.
 5. Fase 2: transcrição de áudio (Whisper/Deepgram), migração para API oficial da Meta, hospedar a ponte fora deste PC.

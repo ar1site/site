@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fundo: #111315;
+  --color-superficie: #292d30;
+  --color-superficie-2: #1c1f22;
+  --color-texto: #f2efe8;
+  --color-cobre: #b86b45;
+  --color-cobre-claro: #d08a63;
+  --color-apoio: #b9c0bf;
+  --color-borda: #3a3f43;
+  --color-ok: #6fae7c;
+  --color-alerta: #e0a04d;
+  --color-erro: #d9605a;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-titulo: var(--font-montserrat), system-ui, sans-serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-fundo);
+  color: var(--color-texto);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.titulo {
+  font-family: var(--font-titulo);
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+@utility campo {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-borda);
+  background: var(--color-superficie-2);
+  color: var(--color-texto);
+  padding: 0.6rem 0.75rem;
+  outline: none;
+  &:focus {
+    border-color: var(--color-cobre);
+  }
+  &::placeholder {
+    color: color-mix(in srgb, var(--color-apoio) 70%, transparent);
+  }
+}
+
+@utility botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+@utility botao-primario {
+  background: var(--color-cobre);
+  color: #fff;
+  &:hover:not(:disabled) {
+    background: var(--color-cobre-claro);
+  }
+}
+
+@utility botao-secundario {
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  border-color: var(--color-borda);
+  &:hover:not(:disabled) {
+    border-color: var(--color-apoio);
+  }
+}
+
+@utility botao-perigo {
+  background: transparent;
+  color: var(--color-erro);
+  border-color: color-mix(in srgb, var(--color-erro) 50%, transparent);
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-erro) 15%, transparent);
+  }
+}
+
+@utility selo {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--color-superficie-2);
+  color: var(--color-apoio);
+  border: 1px solid var(--color-borda);
+  white-space: nowrap;
+}
+
+@utility cartao {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borda);
+  border-radius: 0.75rem;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-borda);
+  border-radius: 4px;
+}

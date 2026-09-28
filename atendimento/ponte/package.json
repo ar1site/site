@@ -1,0 +1,14 @@
+{
+  "name": "ar1-ponte-whatsapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ponte local entre a Evolution API (WhatsApp espelhado) e o painel AR1 Atendimento.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node ponte.mjs",
+    "test": "node --test normalizar.test.mjs"
+  }
+}

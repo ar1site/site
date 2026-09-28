@@ -1,0 +1,146 @@
+# AR1 Films — Evolution API local (WhatsApp espelhado) para a ponte de atendimento.
+#
+# Sobe dois serviços neste computador:
+#   - evolution-api : a API que conversa com o WhatsApp (porta 8080, só neste PC)
+#   - postgres      : banco local da Evolution (sessão, contatos, mensagens)
+#
+# Antes de subir: copie .env.example para .env e preencha EVOLUTION_APIKEY.
+# Depois: .\Subir-Docker.ps1  (ou  docker compose up -d  nesta pasta).
+#
+# Versão: v2.3.7 é a última release estável (GitHub, dez/2025). A tag "latest"
+# no Docker Hub aponta para uma RC da 2.4 — por isso fixamos a versão.
+
+services:
+  evolution-api:
+    image: evoapicloud/evolution-api:v2.3.7
+    container_name: ar1-evolution
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Só a própria máquina alcança a API (127.0.0.1). Nada fica exposto na rede.
+      - "127.0.0.1:8080:8080"
+    extra_hosts:
+      # Permite que o container chame a ponte (Node) que roda no Windows.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - evolution_instances:/evolution/instances
+    environment:
+      # ----------------------------------------------------------- servidor
+      SERVER_URL: http://localhost:8080
+      SERVER_PORT: "8080"
+      LANGUAGE: pt-BR
+      TELEMETRY_ENABLED: "false"
+      DEL_INSTANCE: "false"
+      LOG_LEVEL: ERROR,WARN,INFO
+      LOG_COLOR: "false"
+      LOG_BAILEYS: error
+
+      # -------------------------------------------------------- autenticação
+      AUTHENTICATION_API_KEY: ${EVOLUTION_APIKEY:?Defina EVOLUTION_APIKEY no arquivo .env desta pasta}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
+
+      # ------------------------------------------------------ banco (local)
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:${POSTGRES_PASSWORD:-evolution_local}@postgres:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: ar1_ponte
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+      DATABASE_SAVE_DATA_LABELS: "false"
+      DATABASE_SAVE_DATA_HISTORIC: "false"
+      DATABASE_SAVE_IS_ON_WHATSAPP: "true"
+      DATABASE_SAVE_IS_ON_WHATSAPP_DAYS: "7"
+      DATABASE_DELETE_MESSAGE: "true"
+
+      # ------------------------------------------------ cache local (sem Redis)
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+
+      # ------------------------------------------------------ webhook global
+      # Entrega os eventos abaixo para a ponte (ponte.mjs) no Windows.
+      # CONFERIR: na v2.3.7 o webhook GLOBAL não tem opção de base64
+      # (só existe por instância: webhook.base64). Por isso a ponte também
+      # registra um webhook na instância "ar1" com base64 ligado, e deduplica
+      # eventos que chegam pelos dois caminhos. Se preferir receber cada evento
+      # uma vez só, troque WEBHOOK_GLOBAL_ENABLED para "false".
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_URL: http://host.docker.internal:3901/evolution
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
+      WEBHOOK_EVENTS_APPLICATION_STARTUP: "false"
+      WEBHOOK_EVENTS_QRCODE_UPDATED: "true"
+      WEBHOOK_EVENTS_MESSAGES_SET: "false"
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
+      WEBHOOK_EVENTS_MESSAGES_EDITED: "false"
+      WEBHOOK_EVENTS_MESSAGES_UPDATE: "false"
+      WEBHOOK_EVENTS_MESSAGES_DELETE: "false"
+      WEBHOOK_EVENTS_SEND_MESSAGE: "true"
+      WEBHOOK_EVENTS_SEND_MESSAGE_UPDATE: "false"
+      WEBHOOK_EVENTS_CONTACTS_SET: "false"
+      WEBHOOK_EVENTS_CONTACTS_UPSERT: "false"
+      WEBHOOK_EVENTS_CONTACTS_UPDATE: "false"
+      WEBHOOK_EVENTS_PRESENCE_UPDATE: "false"
+      WEBHOOK_EVENTS_CHATS_SET: "false"
+      WEBHOOK_EVENTS_CHATS_UPSERT: "false"
+      WEBHOOK_EVENTS_CHATS_UPDATE: "false"
+      WEBHOOK_EVENTS_CHATS_DELETE: "false"
+      WEBHOOK_EVENTS_GROUPS_UPSERT: "false"
+      WEBHOOK_EVENTS_GROUPS_UPDATE: "false"
+      WEBHOOK_EVENTS_GROUP_PARTICIPANTS_UPDATE: "false"
+      WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
+      WEBHOOK_EVENTS_LABELS_EDIT: "false"
+      WEBHOOK_EVENTS_LABELS_ASSOCIATION: "false"
+      WEBHOOK_EVENTS_CALL: "false"
+      WEBHOOK_EVENTS_TYPEBOT_START: "false"
+      WEBHOOK_EVENTS_TYPEBOT_CHANGE_STATUS: "false"
+      WEBHOOK_EVENTS_ERRORS: "false"
+      WEBHOOK_EVENTS_ERRORS_WEBHOOK: ""
+      # A ponte responde 200 na hora; se ela estiver fora do ar, a Evolution
+      # tenta de novo com espera crescente (até 10 vezes).
+      WEBHOOK_REQUEST_TIMEOUT_MS: "30000"
+      WEBHOOK_RETRY_MAX_ATTEMPTS: "10"
+      WEBHOOK_RETRY_INITIAL_DELAY_SECONDS: "5"
+      WEBHOOK_RETRY_USE_EXPONENTIAL_BACKOFF: "true"
+      WEBHOOK_RETRY_MAX_DELAY_SECONDS: "300"
+      WEBHOOK_RETRY_JITTER_FACTOR: "0.2"
+      WEBHOOK_RETRY_NON_RETRYABLE_STATUS_CODES: 400,401,403,404,422
+
+      # --------------------------------------------- como aparece no celular
+      CONFIG_SESSION_PHONE_CLIENT: AR1 Atendimento
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      QRCODE_LIMIT: "30"
+      QRCODE_COLOR: "#175197"
+
+      # ------------------------------------------- integrações desligadas
+      WEBSOCKET_ENABLED: "false"
+      RABBITMQ_ENABLED: "false"
+      SQS_ENABLED: "false"
+      S3_ENABLED: "false"
+      CHATWOOT_ENABLED: "false"
+      TYPEBOT_ENABLED: "false"
+      OPENAI_ENABLED: "false"
+      DIFY_ENABLED: "false"
+
+  postgres:
+    image: postgres:16
+    container_name: ar1-evolution-db
+    restart: unless-stopped
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-evolution_local}
+      POSTGRES_DB: evolution
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  evolution_instances:
+  postgres_data:
