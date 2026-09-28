@@ -216,6 +216,7 @@ function Reveal({ children, className = "" }: { children: ReactNode; className?:
 function ContactForm({ defaultProject = "" }: { defaultProject?: string }) {
   const [lead, setLead] = useState<LeadForm>({ ...initialLead, project: projectOptions.includes(defaultProject as typeof projectOptions[number]) ? defaultProject : "" });
   const [status, setStatus] = useState("");
+  const [sending, setSending] = useState(false);
   const started = useRef(false);
   const update = (field: keyof LeadForm, value: string) => setLead((current) => ({ ...current, [field]: value }));
 
@@ -230,11 +231,28 @@ function ContactForm({ defaultProject = "" }: { defaultProject?: string }) {
     return [
       "Olá, AR1! Vim pelo site e quero falar sobre uma proposta.", `Nome: ${lead.name}`, lead.role ? `Cargo: ${lead.role}` : "", `WhatsApp: ${lead.phone}`, lead.email ? `E-mail: ${lead.email}` : "", `Empresa: ${lead.company}`, `Principal interesse: ${lead.project}`, lead.brief ? `O que precisa acontecer: ${lead.brief}` : "", lead.date ? `Data prevista: ${lead.date}` : "", campaign.source ? `UTM source: ${campaign.source}` : "", campaign.medium ? `UTM medium: ${campaign.medium}` : "", campaign.campaign ? `UTM campaign: ${campaign.campaign}` : ""].filter(Boolean).join("\n");
   };
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    trackEvent("lead_form_submit", { page: window.location.pathname, interest: lead.project, channel: "email" });
-    window.location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(`Solicitação de proposta ${SITE_NAME}`)}&body=${encodeURIComponent(message())}`;
-    setStatus(`Conclua o envio no aplicativo de e-mail. Se ele não abrir, escreva para ${EMAIL}.`);
+    if (sending) return;
+    const form = event.currentTarget;
+    const campaign = getCampaignContext();
+    setSending(true);
+    setStatus("Enviando sua solicitação...");
+    try {
+      const response = await fetch("/api/proposta", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...lead, page: window.location.pathname, utm_source: campaign.source ?? "", utm_medium: campaign.medium ?? "", utm_campaign: campaign.campaign ?? "", website: (form.elements.namedItem("website") as HTMLInputElement | null)?.value ?? "" }),
+      });
+      if (!response.ok) throw new Error(String(response.status));
+      trackEvent("lead_form_submit", { page: window.location.pathname, interest: lead.project, channel: "email" });
+      setLead({ ...initialLead, project: lead.project });
+      setStatus("Recebemos sua solicitação. A equipe AR1 Films responde em breve pelo WhatsApp ou e-mail informado.");
+    } catch {
+      setStatus(`Não foi possível enviar agora. Use o botão "Enviar pelo WhatsApp" ou escreva para ${EMAIL}.`);
+    } finally {
+      setSending(false);
+    }
   }
   function sendWhatsapp() { trackEvent("whatsapp_click", { location: "form", page: window.location.pathname, interest: lead.project }); trackEvent("lead_form_submit", { page: window.location.pathname, interest: lead.project, channel: "whatsapp" }); window.open(whatsappMessageLink(message()), "_blank", "noopener,noreferrer"); }
 
@@ -250,7 +268,8 @@ function ContactForm({ defaultProject = "" }: { defaultProject?: string }) {
       <div className="field full"><label htmlFor="brief">O que precisa acontecer?</label><textarea id="brief" rows={4} maxLength={1000} value={lead.brief} onChange={(event) => update("brief", event.target.value)} placeholder="Conte o objetivo, o público e a necessidade principal." /></div>
       <div className="field full"><label htmlFor="date">Data prevista, se houver</label><input id="date" type="date" value={lead.date} onChange={(event) => update("date", event.target.value)} /></div>
       <input type="hidden" name="utm_source" value={getCampaignContext().source ?? ""} /><input type="hidden" name="utm_medium" value={getCampaignContext().medium ?? ""} /><input type="hidden" name="utm_campaign" value={getCampaignContext().campaign ?? ""} />
-      <div className="form-actions full"><button className="button primary" type="submit">Solicitar proposta</button><button className="button ghost" type="button" onClick={sendWhatsapp}>Enviar pelo WhatsApp</button></div>
+      <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" style={{ position: "absolute", left: "-10000px", width: 1, height: 1, opacity: 0 }} />
+      <div className="form-actions full"><button className="button primary" type="submit" disabled={sending}>{sending ? "Enviando..." : "Solicitar proposta"}</button><button className="button ghost" type="button" onClick={sendWhatsapp}>Enviar pelo WhatsApp</button></div>
       <p id="form-status" className="form-note full" role="status" aria-live="polite">{status || "A equipe responde pelo canal que fizer mais sentido para o projeto."}</p>
       <p id="form-privacy" className="form-privacy full">Ao enviar, você autoriza a {SITE_NAME} a entrar em contato pelos dados informados.</p>
     </form>

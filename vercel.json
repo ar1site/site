@@ -7,7 +7,7 @@
     { "source": "/servicos/consultoria-implantacao-estudios-podcast", "destination": "/consultoria-podcast", "permanent": true }
   ],
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
