@@ -46,3 +46,14 @@ Webhook do painel: `POST /api/whatsapp/webhook/<WEBHOOK_SECRET>`.
 - `importar-historico.mjs` está pronto e funciona quando o telefone é resolvível; por ora importa quase nada. Decisão pendente do proprietário: deixar o histórico de lado (recomendado) ou testar Evolution mais nova (2.4+/latest, Baileys com suporte a LID) em nova instância + novo QR.
 - Logout pela API (`DELETE /instance/logout`) não derruba a sessão nesta versão (reconecta); para reparear é preciso desconectar pelo celular (Dispositivos conectados → Desconectar). Script `Reparear-Com-Historico.ps1` cobre o resto (rodar com `-ExecutionPolicy Bypass`).
 - O classificador do Claude Code bloqueia `docker compose up`/logout em serviço em produção mesmo com autorização verbal; o proprietário executa esses passos.
+## Evolução para "CRM de IA" (29/09/2026)
+Pedido do proprietário: campo de contexto (textos e documentos) junto da Análise da IA e, no geral, transformar o painel numa ferramenta comercial de IA. Plano aprovado por ele, nesta ordem:
+1. **Contexto para a IA** — por cliente (na conversa) e base de conhecimento global (Configurações); leitor de PDF/DOCX/TXT; resposta mostra "Baseado em: …". Migração `20260929100000_ar1_contexto.sql` **aplicada**; base inicial (4 documentos de `atendimento/base-inicial/`) **carregada** em `ar1_context_docs`; telas/rotas em construção por agente.
+2. **Funil de vendas** sobre `ar1_quote_requests` (etapas new, qualified, contacting, proposal, negotiating, won, lost; valor estimado, probabilidade, próxima ação, origem site/whatsapp). Migração `20260929110000_ar1_funil.sql` **aplicada**; telas a construir.
+3. **Follow-up sugerido** (tabela `ar1_followups` aplicada): rotina diária que lista quem ficou sem resposta e deixa a mensagem pronta para aprovar.
+4. **Transcrição de áudio** pela mesma chave do OpenRouter (modelo com entrada de áudio), preenchendo `ar1_wa_messages.transcript`.
+5. **Proposta em PDF** gerada pela IA com a marca AR1 Films.
+6. **Resumo diário** no WhatsApp do proprietário.
+7. **Formulário do site** gravando no mesmo funil (`source = 'site'`).
+
+Acesso ao banco: token pessoal do Supabase guardado em `%LOCALAPPDATA%\SistemaACM\ar1-supabase-token.txt` (proprietário concordou em mantê-lo ativo para as próximas migrações). Aplicar migrações pela Management API (`POST /v1/projects/oflpynhhbcnhcugjxgah/database/query`).
