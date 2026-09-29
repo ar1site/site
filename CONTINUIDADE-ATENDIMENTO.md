@@ -57,3 +57,7 @@ Pedido do proprietário: campo de contexto (textos e documentos) junto da Análi
 7. **Formulário do site** gravando no mesmo funil (`source = 'site'`).
 
 Acesso ao banco: token pessoal do Supabase guardado em `%LOCALAPPDATA%\SistemaACM\ar1-supabase-token.txt` (proprietário concordou em mantê-lo ativo para as próximas migrações). Aplicar migrações pela Management API (`POST /v1/projects/oflpynhhbcnhcugjxgah/database/query`).
+## Incidente 29/09/2026 ~16h50 (enxurrada de avisos de estado)
+- A internet deste PC caiu por alguns minutos. A Evolution entrou em ciclo de `connecting` e a ponte repassou cada evento ao painel: 47.996 eventos em 30 min (108.525 no total) em `ar1_wa_events`. O Supabase (plano Free) respondeu 521/525 por alguns minutos; voltou sozinho. O WhatsApp reconectou sozinho.
+- Correção na origem (commit 206311e): a ponte só repassa estado igual uma vez a cada 60 s (`INTERVALO_STATUS_REPETIDO_MS`). Ponte reiniciada pela tarefa agendada. Linhas repetidas apagadas (mantidas as 200 mais recentes).
+- **Pendente**: no painel, o webhook não deve gravar `bridge.status` em `ar1_wa_events` quando o estado não mudou (segunda barreira). Fazer depois que o agente do funil terminar, para não publicar trabalho pela metade.
