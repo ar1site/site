@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { separarFontes } from "@/lib/contexto/fontes";
 import { useEquipe } from "@/lib/equipe";
 import {
   dataCurta,
@@ -26,8 +27,27 @@ import type {
   Sugestao,
 } from "@/lib/tipos";
 import { Balao, BalaoFila } from "./Balao";
+import { ContextoDocs } from "./ContextoDocs";
 import { Avatar, SeloKind, SeloServico, SeloStatus, SeloUrgencia } from "./Selos";
 import { useUsuarioAtual } from "./Shell";
+
+/** Mesmo ponto de quebra do `xl` do Tailwind: acima dele o painel lateral aparece. */
+const CONSULTA_TELA_LARGA = "(min-width: 80rem)";
+
+function assinarTelaLarga(aoMudar: () => void) {
+  const consulta = window.matchMedia(CONSULTA_TELA_LARGA);
+  consulta.addEventListener("change", aoMudar);
+  return () => consulta.removeEventListener("change", aoMudar);
+}
+
+/** true quando o painel lateral (desktop largo) está visível. */
+function useTelaLarga(): boolean {
+  return useSyncExternalStore(
+    assinarTelaLarga,
+    () => window.matchMedia(CONSULTA_TELA_LARGA).matches,
+    () => false,
+  );
+}
 
 interface Estado {
   atendimento: Atendimento;
@@ -99,7 +119,10 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "erro" | "ok"; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
+  const [contextoMudou, setContextoMudou] = useState(false);
+  const telaLarga = useTelaLarga();
   const fimRef = useRef<HTMLDivElement>(null);
+  const aoMudarContexto = useCallback(() => setContextoMudou(true), []);
 
   const mostrar = useCallback((tipo: "erro" | "ok", texto: string) => {
     setAviso({ tipo, texto });
@@ -206,6 +229,7 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
     setOcupado("analisar");
     try {
       await chamarApi("/api/ia/analisar", { atendimento_id: atendimentoId, instrucao });
+      setContextoMudou(false);
       mostrar("ok", "Análise atualizada.");
       await carregar();
       return true;
@@ -295,6 +319,28 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
   const { atendimento, contato, mensagens, sugestao, fila } = estado;
   const nome = nomeDoContato(contato);
   const fechado = atendimento.status === "fechado";
+  const fontes = separarFontes(sugestao?.rationale).fontes;
+
+  const painelAnalise = (
+    <PainelAnalise
+      atendimento={atendimento}
+      fontes={fontes}
+      ocupado={ocupado}
+      aoReanalisar={() => analisar()}
+      aoCriarOrcamento={criarPedidoDeOrcamento}
+    />
+  );
+  // Um só por vez (celular ou desktop), para não buscar nem enviar em dobro.
+  const contextoDoCliente = (ocultarTitulo: boolean) => (
+    <ContextoDoCliente
+      contactId={contato.id}
+      mudou={contextoMudou}
+      ocupado={ocupado}
+      ocultarTitulo={ocultarTitulo}
+      aoMudar={aoMudarContexto}
+      aoReanalisar={() => analisar()}
+    />
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -337,10 +383,19 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
                   </span>
                 )}
               </summary>
-              <div className="border-t border-borda p-3">
-                <PainelAnalise atendimento={atendimento} ocupado={ocupado} aoReanalisar={() => analisar()} aoCriarOrcamento={criarPedidoDeOrcamento} />
-              </div>
+              <div className="border-t border-borda p-3">{painelAnalise}</div>
             </details>
+
+            {/* Contexto do cliente (celular): recolhível logo abaixo da análise */}
+            {!telaLarga && (
+              <details className="cartao mb-3 xl:hidden">
+                <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold">
+                  Contexto deste cliente
+                  {contextoMudou && <span className="selo ml-2 border-cobre/70 align-middle text-cobre-claro">mudou</span>}
+                </summary>
+                <div className="border-t border-borda p-3">{contextoDoCliente(true)}</div>
+              </details>
+            )}
 
             <LinhaDoTempo mensagens={mensagens} fila={fila} nomeDe={nomeDe} aoTentarDeNovo={tentarDeNovo} />
             <div ref={fimRef} />
@@ -368,7 +423,8 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
         {/* Painel da IA (desktop largo) */}
         <aside className="hidden w-80 shrink-0 overflow-y-auto border-l border-borda bg-superficie-2 p-4 xl:block">
           <h2 className="mb-3 text-sm">Análise da IA</h2>
-          <PainelAnalise atendimento={atendimento} ocupado={ocupado} aoReanalisar={() => analisar()} aoCriarOrcamento={criarPedidoDeOrcamento} />
+          {painelAnalise}
+          {telaLarga && <div className="cartao mt-5 p-3">{contextoDoCliente(false)}</div>}
         </aside>
       </div>
     </div>
@@ -560,11 +616,14 @@ function LinhaDoTempo({
 
 function PainelAnalise({
   atendimento,
+  fontes,
   ocupado,
   aoReanalisar,
   aoCriarOrcamento,
 }: {
   atendimento: Atendimento;
+  /** Documentos usados na sugestão pendente. */
+  fontes: string[];
   ocupado: string | null;
   aoReanalisar: () => void;
   aoCriarOrcamento: () => void;
@@ -602,6 +661,11 @@ function PainelAnalise({
               ))}
             </dl>
           )}
+          {fontes.length > 0 && (
+            <p className="break-words text-xs text-apoio">
+              <span className="text-cobre-claro">Baseado em:</span> {fontes.join("; ")}
+            </p>
+          )}
           <p className="text-[11px] text-apoio">
             Analisado {tempoRelativo(atendimento.ai_analyzed_at)}
             {agendada ? " · nova análise agendada" : ""}
@@ -624,6 +688,50 @@ function PainelAnalise({
   );
 }
 
+// ------------------------------------------------------ contexto do cliente
+
+function ContextoDoCliente({
+  contactId,
+  mudou,
+  ocupado,
+  ocultarTitulo,
+  aoMudar,
+  aoReanalisar,
+}: {
+  contactId: string;
+  mudou: boolean;
+  ocupado: string | null;
+  ocultarTitulo: boolean;
+  aoMudar: () => void;
+  aoReanalisar: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {mudou && (
+        <div role="status" className="rounded-lg border border-cobre/60 bg-cobre/10 p-3 text-xs">
+          <p>O contexto deste cliente mudou. A análise e a resposta sugerida ainda usam o contexto antigo.</p>
+          <button
+            type="button"
+            className="botao botao-primario mt-2 w-full whitespace-normal py-1.5 text-xs sm:w-auto"
+            onClick={aoReanalisar}
+            disabled={ocupado === "analisar"}
+          >
+            {ocupado === "analisar" ? "Analisando…" : "Reanalisar com o novo contexto"}
+          </button>
+        </div>
+      )}
+      <ContextoDocs
+        escopo="contato"
+        contactId={contactId}
+        titulo="Contexto deste cliente"
+        descricao="Briefing, proposta enviada, combinados e outros documentos deste contato. A IA usa só nesta conversa e nas próximas com ele."
+        ocultarTitulo={ocultarTitulo}
+        aoMudar={aoMudar}
+      />
+    </div>
+  );
+}
+
 // ---------------------------------------------------------- sugestão / composer
 
 function CartaoSugestao({
@@ -642,6 +750,7 @@ function CartaoSugestao({
   const [texto, setTexto] = useState(sugestao.reply);
   const [instrucao, setInstrucao] = useState("");
   const editado = texto.trim() !== sugestao.reply.trim();
+  const motivo = separarFontes(sugestao.rationale);
 
   return (
     <div className="cartao mb-3 border-cobre/50 p-3">
@@ -649,7 +758,12 @@ function CartaoSugestao({
         <p className="text-xs font-semibold uppercase tracking-wide text-cobre-claro">Resposta sugerida</p>
         {editado && <span className="text-[11px] text-apoio">editada</span>}
       </div>
-      {sugestao.rationale && <p className="mb-2 text-xs text-apoio">{sugestao.rationale}</p>}
+      {motivo.texto && <p className="mb-2 text-xs text-apoio">{motivo.texto}</p>}
+      {motivo.fontes.length > 0 && (
+        <p className="mb-2 break-words text-xs text-apoio">
+          <span className="text-cobre-claro">Baseado em:</span> {motivo.fontes.join("; ")}
+        </p>
+      )}
       <textarea
         className="campo min-h-24 text-sm"
         value={texto}

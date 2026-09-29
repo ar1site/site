@@ -1,9 +1,11 @@
 import "server-only";
 
 import { z } from "zod";
+import { anexarFontes, filtrarFontes } from "../contexto/fontes";
+import type { DocParaPrompt } from "../contexto/orcamento";
 import { ErroIA, gerarEstruturado } from "../ia";
 import { supabaseServico } from "../supabase/service";
-import type { Atendimento, Contato, DadosExtraidos, Mensagem } from "../tipos";
+import type { Atendimento, Contato, DadosExtraidos, DocContexto, Mensagem } from "../tipos";
 import { LIMITE_MENSAGENS, montarContexto } from "./contexto";
 
 export class ErroAnalise extends Error {
@@ -33,6 +35,8 @@ export function esquemaAnalise(servicos: string[]) {
     }),
     reply: z.string().nullable(),
     rationale: z.string(),
+    /** Títulos dos documentos realmente usados (pode ser vazio). */
+    fontes: z.array(z.string()),
   });
 }
 
@@ -59,6 +63,41 @@ export async function lerConfiguracoesDeAtendimento(): Promise<{
   return { instrucoes, servicos };
 }
 
+/** Máximo de documentos ativos lidos por análise (os mais recentes). */
+const LIMITE_DOCUMENTOS = 200;
+
+type LinhaDocumento = Pick<DocContexto, "scope" | "title" | "content">;
+
+/**
+ * Lê os documentos ativos da base da AR1 e do contato, mais recentes
+ * primeiro. Se a leitura falhar (por exemplo, a migração do contexto ainda
+ * não foi aplicada), a análise segue sem documentos e o erro vai para o log.
+ */
+export async function lerDocumentosDeContexto(
+  contactId: string,
+): Promise<{ baseConhecimento: DocParaPrompt[]; contextoCliente: DocParaPrompt[] }> {
+  const { data, error } = await supabaseServico()
+    .from("ar1_context_docs")
+    .select("scope, title, content")
+    .eq("active", true)
+    .or(`scope.eq.global,contact_id.eq.${contactId}`)
+    .order("updated_at", { ascending: false })
+    .limit(LIMITE_DOCUMENTOS);
+  if (error) {
+    console.error("[analise] não foi possível ler os documentos de contexto:", error.message);
+    return { baseConhecimento: [], contextoCliente: [] };
+  }
+  const baseConhecimento: DocParaPrompt[] = [];
+  const contextoCliente: DocParaPrompt[] = [];
+  for (const linha of (data ?? []) as LinhaDocumento[]) {
+    if (!linha.content?.trim()) continue; // arquivo sem texto (ex.: PDF escaneado)
+    const doc = { titulo: linha.title, texto: linha.content };
+    if (linha.scope === "global") baseConhecimento.push(doc);
+    else contextoCliente.push(doc);
+  }
+  return { baseConhecimento, contextoCliente };
+}
+
 /**
  * Analisa um atendimento com a IA e grava o resultado. Lança ErroAnalise
  * com mensagem legível (já registrada em ai_error) quando falha.
@@ -78,7 +117,7 @@ export async function analisarAtendimento(
   if (!atendimentoBruto) throw new ErroAnalise("Atendimento não encontrado.", 404);
   const atendimento = atendimentoBruto as Atendimento;
 
-  const [{ data: contatoBruto }, { data: mensagensBrutas }, config] = await Promise.all([
+  const [{ data: contatoBruto }, { data: mensagensBrutas }, config, documentos] = await Promise.all([
     db.from("ar1_wa_contacts").select("*").eq("id", atendimento.contact_id).maybeSingle(),
     db
       .from("ar1_wa_messages")
@@ -87,6 +126,7 @@ export async function analisarAtendimento(
       .order("sent_at", { ascending: false })
       .limit(LIMITE_MENSAGENS),
     lerConfiguracoesDeAtendimento(),
+    lerDocumentosDeContexto(atendimento.contact_id),
   ]);
   if (!contatoBruto) throw new ErroAnalise("Contato do atendimento não encontrado.", 404);
   const contato = contatoBruto as Contato;
@@ -99,6 +139,8 @@ export async function analisarAtendimento(
     servicos: config.servicos,
     extraidoAnterior: atendimento.ai_extracted as DadosExtraidos,
     instrucaoExtra,
+    baseConhecimento: documentos.baseConhecimento,
+    contextoCliente: documentos.contextoCliente,
   });
 
   let analise: ResultadoAnalise;
@@ -127,6 +169,9 @@ export async function analisarAtendimento(
   if (analise.kind === "spam") reply = null;
   if (contexto.ultimaFoiNossa && !instrucaoExtra?.trim()) reply = null;
   if (reply && reply.length > 5000) reply = reply.slice(0, 5000);
+
+  // Só valem como fonte os documentos que de fato foram para o prompt.
+  const fontes = filtrarFontes(analise.fontes, contexto.titulosDosDocumentos);
 
   const extracted: DadosExtraidos = {
     nome: analise.extracted.nome,
@@ -165,7 +210,7 @@ export async function analisarAtendimento(
       .insert({
         atendimento_id: atendimentoId,
         reply,
-        rationale: analise.rationale.slice(0, 2000),
+        rationale: anexarFontes(analise.rationale, fontes, 2000),
         status: "pendente",
         model: modelo.slice(0, 100),
       })
@@ -175,5 +220,9 @@ export async function analisarAtendimento(
     sugestaoId = sugestao.id;
   }
 
-  return { analise: { ...analise, reply, extracted: analise.extracted }, sugestaoId, modelo };
+  return {
+    analise: { ...analise, reply, extracted: analise.extracted, fontes },
+    sugestaoId,
+    modelo,
+  };
 }

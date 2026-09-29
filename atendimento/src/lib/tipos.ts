@@ -167,3 +167,38 @@ export interface QrWhatsapp {
   media_path: string | null;
   updated_at: string | null;
 }
+
+// ------------------------------------------------------ contexto para a IA
+
+/** Escopo no banco: base da AR1 (global) ou de um contato. */
+export type EscopoContextoBanco = "global" | "contact";
+/** Escopo nas rotas e na interface. */
+export type EscopoContexto = "global" | "contato";
+export type KindContexto = "text" | "file";
+
+/** Linha de public.ar1_context_docs. */
+export interface DocContexto {
+  id: string;
+  scope: EscopoContextoBanco;
+  contact_id: string | null;
+  title: string;
+  kind: KindContexto;
+  content: string;
+  content_truncated: boolean;
+  file_path: string | null;
+  file_name: string | null;
+  file_mime: string | null;
+  file_size: number | null;
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Documento na lista: sem o conteúdo inteiro, com tamanho e prévia. */
+export interface DocContextoResumo extends Omit<DocContexto, "content"> {
+  /** Quantidade de caracteres do texto guardado. */
+  chars: number;
+  /** Primeiros 200 caracteres do texto. */
+  previa: string;
+}

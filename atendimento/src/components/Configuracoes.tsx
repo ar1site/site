@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useEquipe } from "@/lib/equipe";
 import { dataHora, tempoRelativo } from "@/lib/formato";
 import { supabaseNoNavegador } from "@/lib/supabase/browser";
+import { ContextoDocs } from "./ContextoDocs";
 import { useUsuarioAtual } from "./Shell";
 
 interface StatusResposta {
@@ -32,6 +33,7 @@ export function Configuracoes() {
       <h1 className="text-xl">Configurações</h1>
       <SecaoWhatsapp />
       <SecaoInstrucoes podeEditar={usuario.role === "admin"} />
+      <SecaoBaseDeConhecimento />
       <SecaoEquipe />
     </div>
   );
@@ -247,6 +249,20 @@ function SecaoInstrucoes({ podeEditar }: { podeEditar: boolean }) {
           {!podeEditar && <span className="text-xs text-apoio">Só administradores alteram.</span>}
         </div>
       </form>
+    </section>
+  );
+}
+
+// ---------------------------------------------------- base de conhecimento
+
+function SecaoBaseDeConhecimento() {
+  return (
+    <section className="cartao p-4">
+      <ContextoDocs
+        escopo="global"
+        titulo="Base de conhecimento da AR1"
+        descricao="Coloque aqui o que a IA precisa saber sobre a AR1: serviços e preços, condições comerciais, apresentação e portfólio, perguntas frequentes. Vale para todas as conversas. As instruções acima continuam mandando: se elas disserem para não passar preço, a IA não passa."
+      />
     </section>
   );
 }

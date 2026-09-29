@@ -9,6 +9,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // "server-only" lança erro fora do servidor do Next; nos testes vira um módulo vazio.
+      "server-only": fileURLToPath(new URL("./tests/ajuda/server-only.ts", import.meta.url)),
     },
   },
 });
