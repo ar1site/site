@@ -108,8 +108,6 @@ export async function POST(request: Request, ctx: RouteContext<"/api/whatsapp/we
         }
         break;
       }
-      case "conexao":
-        break; // tratado acima
       case "qr": {
         await gravarQr({ media_path: resultado.mediaPath, updated_at: resultado.updatedAt });
         break;
