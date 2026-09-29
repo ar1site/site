@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { criarPreparadorDeMidia } from "./audio.mjs";
 import { BUCKET, erroCurto, normalizarMensagem, payloadMensagem } from "./normalizar.mjs";
 
 const PASTA_LOCAL = path.join(process.env.LOCALAPPDATA || ".", "SistemaACM");
@@ -59,6 +60,12 @@ const segredo = cfg.webhookUrl.split("/").filter(Boolean).pop();
 const painelUrl = cfg.webhookUrl.replace(/\/api\/whatsapp\/webhook\/.*$/, "");
 
 const log = (m) => console.log(`${new Date().toISOString().slice(11, 19)} ${m}`);
+
+// Áudio vira MP3 antes de subir (igual à ponte); se o ffmpeg faltar ou falhar, vai o original.
+const prepararMidia = criarPreparadorDeMidia({
+  ffmpeg: (env.FFMPEG ?? "").trim() || "ffmpeg",
+  avisar: (m) => log(`[AVISO] ${m}`),
+});
 
 // ------------------------------------------------------------------ Evolution DB
 
@@ -113,9 +120,10 @@ const sb = (caminho, o = {}) =>
   chamar(`${cfg.supabaseUrl}/rest/v1/${caminho}`, { ...o, headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}`, ...(o.headers || {}) } });
 const evo = (caminho, o = {}) => chamar(`${cfg.evolutionUrl}${caminho}`, { ...o, headers: { apikey: cfg.evolutionApiKey, ...(o.headers || {}) } });
 
-async function subirMidia(midia) {
+/** Sobe a mídia e devolve o caminho (com o bucket) e o mime do arquivo realmente salvo. */
+async function subirMidia(midia, kind) {
   let base64 = midia.base64;
-  let mime = midia.mime;
+  let mimeReal = null;
   if (!base64) {
     const r = await evo(`/chat/getBase64FromMediaMessage/${encodeURIComponent(cfg.instancia)}`, {
       metodo: "POST",
@@ -123,18 +131,21 @@ async function subirMidia(midia) {
       timeoutMs: 120_000,
     });
     base64 = typeof r?.base64 === "string" ? r.base64 : null;
-    if (typeof r?.mimetype === "string") mime = r.mimetype.split(";")[0].trim();
+    if (typeof r?.mimetype === "string") mimeReal = r.mimetype.split(";")[0].trim();
   }
   if (!base64) throw new Error("sem base64");
   const buffer = Buffer.from(base64, "base64");
   if (!buffer.length || buffer.length > LIMITE_MIDIA_BYTES) throw new Error(`tamanho ${buffer.length}`);
-  const url = `${cfg.supabaseUrl}/storage/v1/object/${BUCKET}/${midia.caminho.split("/").map(encodeURIComponent).join("/")}`;
+  // Caminho e mime finais são decididos depois da conversão.
+  const arquivo = await prepararMidia({ kind, caminho: midia.caminho, mime: midia.mime, mimeReal, buffer });
+  const url = `${cfg.supabaseUrl}/storage/v1/object/${BUCKET}/${arquivo.caminho.split("/").map(encodeURIComponent).join("/")}`;
   await chamar(url, {
     metodo: "POST",
-    headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}`, "x-upsert": "true", "Content-Type": mime || "application/octet-stream" },
-    body: buffer,
+    headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}`, "x-upsert": "true", "Content-Type": arquivo.mime || "application/octet-stream" },
+    body: arquivo.buffer,
     timeoutMs: 120_000,
   });
+  return { media_path: `${BUCKET}/${arquivo.caminho}`, media_mime: arquivo.mime };
 }
 
 // ------------------------------------------------------------------ principal
@@ -177,7 +188,9 @@ async function principal() {
       const { mensagem, midia } = r;
       if (midia) {
         try {
-          await subirMidia(midia);
+          const salvo = await subirMidia(midia, mensagem.kind);
+          mensagem.media_path = salvo.media_path;
+          mensagem.media_mime = salvo.media_mime;
           comMidia++;
         } catch (e) {
           semMidia++;

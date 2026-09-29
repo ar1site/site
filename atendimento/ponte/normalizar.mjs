@@ -143,6 +143,37 @@ export function caminhoMidia(phone, externalId, mime, nomeArquivo = null) {
   return `${BUCKET}/${somenteDigitos(phone) || "desconhecido"}/${nomeSeguro(externalId)}.${ext}`;
 }
 
+export const MIME_MP3 = "audio/mpeg";
+
+/** Troca a extensão do arquivo: "5562/AUD1.ogg" + "mp3" -> "5562/AUD1.mp3". */
+export function trocarExtensao(caminho, ext) {
+  const c = String(caminho ?? "");
+  const barra = c.lastIndexOf("/");
+  const ponto = c.lastIndexOf(".");
+  const semExt = ponto > barra + 1 ? c.slice(0, ponto) : c;
+  return `${semExt}.${ext}`;
+}
+
+/**
+ * Destino final de uma mídia no Storage. É decidido DEPOIS da tentativa de conversão,
+ * para que o caminho e o mime enviados ao painel sejam os do arquivo realmente salvo:
+ *   - áudio convertido              -> "<id>.mp3", "audio/mpeg";
+ *   - áudio não convertido (falha)  -> arquivo original, extensão conforme o mime real;
+ *   - demais mídias                 -> caminho do normalizador, mime real.
+ * `caminho` vai sem o prefixo do bucket. `mimeReal` é o mime devolvido pela Evolution
+ * quando a mídia foi buscada pela API (pode diferir do que veio no evento).
+ */
+export function destinoDaMidia({ kind, caminho, mime }, { convertido = false, mimeReal = null } = {}) {
+  if (kind === "audio" && convertido) {
+    return { caminho: trocarExtensao(caminho, "mp3"), mime: MIME_MP3 };
+  }
+  const real = mimeBase(mimeReal) ?? mimeBase(mime) ?? "application/octet-stream";
+  if (kind === "audio" && EXT_POR_MIME[real]) {
+    return { caminho: trocarExtensao(caminho, EXT_POR_MIME[real]), mime: real };
+  }
+  return { caminho, mime: real };
+}
+
 /** Tira o prefixo "data:image/png;base64," se existir. */
 export function base64Puro(v) {
   const s = texto(v);

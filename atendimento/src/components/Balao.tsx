@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { horaCurta } from "@/lib/formato";
 import type { Mensagem, Outbox } from "@/lib/tipos";
 
@@ -11,6 +12,77 @@ export function urlDaMidia(mediaUrl: string | null): string | null {
   }
   if (/^https?:\/\//i.test(mediaUrl)) return mediaUrl;
   return null;
+}
+
+/**
+ * Player do áudio com a transcrição embaixo. Sem transcrição, mostra o botão
+ * "Transcrever" (POST /api/transcrever); o texto gravado volta também pelo
+ * tempo real da conversa.
+ */
+function AudioComTranscricao({ m, url }: { m: Mensagem; url: string | null }) {
+  const [estado, setEstado] = useState<"parado" | "transcrevendo">("parado");
+  const [textoLocal, setTextoLocal] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const transcricao = m.transcript?.trim() || textoLocal;
+  // Só dá para transcrever o que está guardado no painel (bucket da ponte).
+  const podeTranscrever = Boolean(m.media_url?.startsWith("storage:"));
+
+  async function transcrever() {
+    setEstado("transcrevendo");
+    setErro(null);
+    try {
+      const resposta = await fetch("/api/transcrever", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message_id: m.id }),
+      });
+      const dados = (await resposta.json().catch(() => null)) as
+        | { ok?: boolean; transcricao?: string; erro?: string }
+        | null;
+      if (!resposta.ok || !dados?.ok || !dados.transcricao) {
+        setErro(dados?.erro || "Não foi possível transcrever este áudio. Tente de novo.");
+        return;
+      }
+      setTextoLocal(dados.transcricao);
+    } catch {
+      setErro("Não foi possível falar com o servidor. Verifique a conexão e tente de novo.");
+    } finally {
+      setEstado("parado");
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      {url ? <audio controls preload="none" src={url} className="max-w-full" /> : <span className="italic text-apoio">Áudio indisponível</span>}
+      {transcricao ? (
+        <div className="border-l-2 border-apoio/40 pl-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-apoio">Transcrição</p>
+          <p className="whitespace-pre-wrap break-words text-xs leading-relaxed">{transcricao}</p>
+        </div>
+      ) : estado === "transcrevendo" ? (
+        <p className="text-xs italic text-apoio" role="status">
+          Transcrevendo…
+        </p>
+      ) : (
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs italic text-apoio">Áudio ainda sem transcrição</p>
+            {podeTranscrever && (
+              <button type="button" className="botao botao-secundario px-2 py-0.5 text-xs" onClick={transcrever}>
+                Transcrever
+              </button>
+            )}
+          </div>
+          {erro && (
+            <p className="text-xs text-erro" role="alert">
+              {erro}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Conteudo({ m }: { m: Mensagem }) {
@@ -35,16 +107,7 @@ function Conteudo({ m }: { m: Mensagem }) {
         </div>
       );
     case "audio":
-      return (
-        <div className="space-y-1">
-          {url ? <audio controls preload="none" src={url} className="max-w-full" /> : <span className="italic text-apoio">Áudio indisponível</span>}
-          {m.transcript ? (
-            <p className="whitespace-pre-wrap text-sm">{m.transcript}</p>
-          ) : (
-            <p className="text-xs italic text-apoio">Áudio ainda sem transcrição</p>
-          )}
-        </div>
-      );
+      return <AudioComTranscricao m={m} url={url} />;
     case "video":
       return (
         <div className="space-y-1">

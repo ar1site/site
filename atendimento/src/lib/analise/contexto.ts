@@ -104,7 +104,7 @@ export function descreverMensagem(
       return legenda ? `[imagem: ${legenda}]` : "[imagem sem legenda]";
     case "audio":
       return m.transcript?.trim()
-        ? `[áudio transcrito] ${m.transcript.trim()}`
+        ? `[áudio] ${m.transcript.trim()}`
         : "[áudio sem transcrição]";
     case "video":
       return legenda ? `[vídeo: ${legenda}]` : "[vídeo]";

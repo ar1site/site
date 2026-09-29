@@ -14,6 +14,7 @@ Evolution API  ── Docker neste PC (porta 8080, só local)
 ponte.mjs      ── Node neste PC (porta 3901, só local)
    │  1. traduz os eventos e manda para o painel
    │  2. guarda fotos/áudios/arquivos no Storage do Supabase
+   │     (áudio é convertido para MP3 antes de subir)
    │  3. a cada 3 s pega o que o painel mandou enviar (fila) e envia
    ▼
 painel na Vercel + banco Supabase
@@ -38,7 +39,9 @@ Para tirar essa dependência depois: copie esta pasta para um servidor Linux peq
 | `.env.example` → `.env` | Chave da Evolution (`EVOLUTION_APIKEY`). O `.env` não é versionado. |
 | `ponte.mjs` | O programa da ponte. |
 | `normalizar.mjs` | Tradução dos eventos da Evolution para o formato do painel (puro, testado). |
-| `normalizar.test.mjs` | Testes: `npm test` (ou `node --test normalizar.test.mjs`). |
+| `audio.mjs` | Conversão de áudio para MP3 com o `ffmpeg` e decisão do arquivo final (testado). |
+| `normalizar.test.mjs`, `audio.test.mjs` | Testes: `npm test` (ou `node --test normalizar.test.mjs audio.test.mjs`). |
+| `importar-historico.mjs` | Importa conversas antigas da Evolution para o painel (também converte áudio). |
 | `Subir-Docker.ps1` | Sobe/para a Evolution (`docker compose up -d`). |
 | `Instalar-Ponte.ps1` | Cria a tarefa agendada `AR1-Ponte-WhatsApp` (inicia com o Windows, sem janela, reinicia se cair). |
 | `iniciar-oculto.vbs` | Usado pela tarefa para rodar o Node sem janela. |
@@ -65,7 +68,21 @@ WEBHOOK_URL=https://atendimento.ar1films.com/api/whatsapp/webhook/<WEBHOOK_SECRE
 PORTA=3901
 ```
 
-Opcionais: `ABRIR_QR=0` (não abrir o PNG do QR na tela) e `PONTE_URL_DOCKER` (URL que o container usa para achar a ponte; padrão `http://host.docker.internal:3901/evolution`). A variável de ambiente `PONTE_ENV` aponta para outro arquivo de configuração, se precisar.
+Opcionais: `FFMPEG` (caminho do programa que converte áudio; padrão `ffmpeg` do PATH), `ABRIR_QR=0` (não abrir o PNG do QR na tela) e `PONTE_URL_DOCKER` (URL que o container usa para achar a ponte; padrão `http://host.docker.internal:3901/evolution`). A variável de ambiente `PONTE_ENV` aponta para outro arquivo de configuração, se precisar.
+
+## Áudio em MP3
+
+Antes de subir um áudio ao Storage, a ponte converte para **MP3 mono, 16 kHz, ~48 kbps** (cerca de 360 KB por minuto). Motivos: MP3 toca em qualquer navegador (o iPhone não toca o ogg/opus das notas de voz do WhatsApp) e é aceito pelos modelos que transcrevem o áudio no painel.
+
+- Usa o `ffmpeg` do PATH. Para apontar outro, coloque `FFMPEG=C:\caminho\ffmpeg.exe` no `ar1-ponte.env`.
+- O áudio entra pelo stdin e sai pelo stdout do `ffmpeg`; nada é gravado em disco. Tempo limite: 60 s por áudio.
+- O painel recebe o caminho e o tipo do arquivo realmente salvo: `<id>.mp3` e `audio/mpeg`.
+- **Se o `ffmpeg` não existir ou a conversão falhar**, sobe o arquivo original (`<id>.ogg`, `audio/ogg`) e o log registra um aviso, **uma vez por execução**. Os áudios seguintes continuam subindo no formato original; a linha `mídia audio salva em …` mostra a extensão de cada um.
+- Áudio em M4A/MP4 pode não converter pelo stdin (o `ffmpeg` precisa voltar no arquivo para ler o índice). Nesse caso sobe o original, que também toca no iPhone e é aceito na transcrição.
+- Imagens, vídeos e documentos não são convertidos.
+- A mudança vale para os áudios que chegarem depois de reiniciar a ponte. Os que já estão no Storage continuam em ogg.
+
+Conferir: `ffmpeg -version` no PowerShell e, no log, linhas como `mídia audio salva em ar1-wa-media/5562…/ABC.mp3 (12 KB, convertida de 8 KB)`.
 
 ## Como subir (primeira vez)
 
@@ -123,6 +140,7 @@ O QR muda a cada ~30 segundos; a ponte salva sempre o mais novo. Se expirar, é 
 | `painel recusou ... (404)` | `WEBHOOK_URL` com segredo errado ou domínio ainda não apontado. |
 | Estado `close` com motivo 401 | A sessão foi encerrada no celular. A ponte gera um QR novo; leia de novo. |
 | Mensagens ficam `queued` no painel | WhatsApp desconectado (veja o log: `fila: ... não está conectado`). |
+| `não converti o áudio para MP3 (ffmpeg não encontrado …)` | Instale o `ffmpeg` ou aponte `FFMPEG` no `ar1-ponte.env`, e reinicie a ponte. Enquanto isso os áudios sobem em ogg. |
 | Mídia sem arquivo (`[image: mídia não recuperada]`) | A Evolution não devolveu o conteúdo; o texto foi, o arquivo não. Veja o log para o motivo. |
 
 ## Segurança

@@ -228,6 +228,8 @@ describe("áudio", () => {
     assert.equal(r.mensagem.media_path, "ar1-wa-media/5562988887777/AUD001.ogg");
     assert.equal(r.midia.mime, "audio/ogg");
     assert.equal(r.midia.base64, null);
+    // Este caminho é só a proposta do normalizador: a ponte converte o áudio para MP3 e
+    // decide o caminho final depois (destinoDaMidia; veja audio.test.mjs).
   });
 });
 

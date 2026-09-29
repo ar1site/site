@@ -31,6 +31,7 @@ Rotas de servidor:
 | --- | --- |
 | `POST /api/whatsapp/webhook/[segredo]` | Recebe eventos da ponte local **ou** da Z-API (mesmo webhook; detecta pelo campo `type`). |
 | `POST /api/ia/analisar` | Analisa um atendimento (sessão da equipe ou `x-internal-secret`). |
+| `POST /api/transcrever` | Transcreve o áudio de uma mensagem (`{ "message_id": "…" }`), grava em `transcript` e devolve o texto (sessão da equipe ou `x-internal-secret`). |
 | `POST /api/whatsapp/enviar` | Envia texto: enfileira para a ponte (`bridge`) ou chama a Z-API (`zapi`). Com `followup_id`, marca a retomada como enviada. |
 | `POST /api/followups/gerar` | Gera as sugestões de retomada (sessão da equipe, `x-internal-secret` ou `Authorization: Bearer CRON_SECRET`). `GET` só para o cron e chamadas internas. |
 | `GET /api/whatsapp/status` | Estado da conexão. |
@@ -55,7 +56,8 @@ repositório: `.env.local` já está no `.gitignore`.
 | `SUPABASE_SERVICE_ROLE_KEY` | Chave de serviço. Só no servidor. |
 | `AI_PROVIDER` | `openrouter` (padrão) ou `anthropic`. |
 | `AI_MODEL` | Modelo. Padrão `anthropic/claude-sonnet-5.5` (OpenRouter) ou `claude-sonnet-5-5` (Anthropic). |
-| `OPENROUTER_API_KEY` | Chave da OpenRouter (quando `AI_PROVIDER=openrouter`). |
+| `OPENROUTER_API_KEY` | Chave da OpenRouter (quando `AI_PROVIDER=openrouter`). Também é a chave da transcrição de áudio, sempre. |
+| `AI_AUDIO_MODEL` | Modelo com entrada de áudio usado na transcrição. Padrão `google/gemini-3.5-flash-lite`. |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Só quando `AI_PROVIDER=anthropic`. |
 | `WHATSAPP_PROVIDER` | `bridge` (padrão, ponte local) ou `zapi`. |
 | `ZAPI_INSTANCE_ID`, `ZAPI_TOKEN`, `ZAPI_CLIENT_TOKEN` | Só quando `WHATSAPP_PROVIDER=zapi`. |
@@ -115,7 +117,7 @@ O painel responde sempre `200 {"ok":true}`.
     "kind": "text",
     "body": "texto ou legenda, ou null",
     "media_path": "ar1-wa-media/5562999998888/<id>.<ext>",
-    "media_mime": "audio/ogg",
+    "media_mime": "audio/mpeg",
     "media_name": "briefing.pdf",
     "is_group": false,
     "outbox_id": null
@@ -127,6 +129,9 @@ O painel responde sempre `200 {"ok":true}`.
 - `media_path`: caminho do arquivo que a ponte subiu no bucket privado
   `ar1-wa-media` (ou `null`). O painel grava `media_url = storage:ar1-wa-media/<caminho>`
   e serve o arquivo por `/api/midia`.
+- Áudio: a ponte converte para MP3 antes de subir, então chega `<id>.mp3` com
+  `media_mime: "audio/mpeg"`. Se a conversão falhar, chega o arquivo original
+  (`<id>.ogg`, `audio/ogg`). O caminho e o mime são sempre os do arquivo salvo.
 - `from_me: true` + `outbox_id`: a mensagem saiu pelo painel. O painel grava
   `sent_by = 'sistema'`, `sent_by_user = outbox.created_by`, marca a linha da
   `ar1_wa_outbox` como `sent` (com `external_id`) e liga a sugestão da IA à
@@ -209,6 +214,86 @@ marcados com `// CONFERIR` em `src/lib/whatsapp/parser.ts` e `src/lib/whatsapp/z
 
 Se a análise em segundo plano não rodar (por exemplo, o app hibernou), o
 botão "Analisar agora" na conversa faz o mesmo trabalho.
+
+## Transcrição de áudio
+
+Todo áudio do WhatsApp vira texto, para a equipe ler sem ouvir e para a IA
+considerar o que foi dito.
+
+### Como funciona
+
+1. **Ponte**: ao receber um áudio, converte para **MP3 mono, 16 kHz, ~48 kbps**
+   com o `ffmpeg` e sobe o `.mp3` no bucket `ar1-wa-media`. MP3 toca em
+   qualquer navegador (o iPhone não toca o ogg/opus das notas de voz) e é
+   aceito pelos modelos de áudio. Sem `ffmpeg`, ou se a conversão falhar, sobe o
+   arquivo original. Detalhes em `ponte/LEIA-ME.md`.
+2. **Webhook**: quando chega um áudio novo guardado no bucket, o painel
+   responde à ponte na hora e, em segundo plano, **primeiro transcreve e grava
+   `ar1_wa_messages.transcript`; depois espera e analisa**. Assim a análise
+   sempre enxerga a transcrição. O tempo gasto transcrevendo é descontado da
+   espera de 40 s.
+3. **Transcrição** (`src/lib/transcricao.ts`): baixa o arquivo com a chave de
+   serviço e chama a OpenRouter (`/chat/completions`) com o modelo de
+   `AI_AUDIO_MODEL`, mandando a instrução e o áudio em base64
+   (`input_audio`, formato `mp3`, `ogg`, `wav` ou `m4a`), com `temperature: 0`.
+4. **Análise**: na conversa enviada à IA, a linha do áudio vira
+   `[áudio] <transcrição>`. Sem transcrição, continua `[áudio sem transcrição]`.
+5. **Tela**: embaixo do player aparece o texto, com o rótulo "Transcrição".
+   Sem texto, aparece o botão **Transcrever**, que chama `POST /api/transcrever`.
+
+| Áudio | Transcreve sozinho | Dispara análise |
+| --- | --- | --- |
+| Recebido do contato | sim | sim |
+| Enviado por nós (celular) | sim | não |
+| Histórico importado | não (use o botão) | não |
+| Anterior a este recurso, ou que falhou | não (use o botão) | não |
+| Z-API (arquivo fora do bucket) | não | sim |
+
+A instrução pede transcrição fiel em português do Brasil, sem resumir nem
+corrigir o sentido, com pontuação natural, `[inaudível]` onde não der para
+entender e `[sem fala]` quando o áudio não tem fala. O que é dito no áudio é
+tratado como conteúdo: ordens gravadas são só transcritas.
+
+### Se a transcrição falhar
+
+A análise segue normalmente (o áudio entra como `[áudio sem transcrição]`), o
+motivo vai para o log do servidor e o botão **Transcrever** continua na
+mensagem. O botão mostra o erro em português: chave recusada, conta sem
+créditos, modelo não encontrado, modelo que não aceita áudio, limite de uso,
+tempo esgotado, arquivo grande demais ou arquivo não encontrado.
+
+### Limites
+
+| Limite | Valor |
+| --- | --- |
+| Tamanho do arquivo | 20 MB (cerca de 55 minutos no MP3 da ponte) |
+| Tempo de espera pela IA | 50 s |
+| Texto gravado | 20.000 caracteres (o que passar é cortado) |
+| Formatos aceitos | MP3, OGG, WAV, M4A |
+| Conversão na ponte | 60 s por áudio |
+
+O formato é decidido pelo começo do arquivo; se não der para reconhecer, pelo
+mime e depois pela extensão. Áudio em outro formato (AAC solto, AMR) não é
+transcrito.
+
+Se dois áudios chegarem em sequência, cada um é transcrito no próprio pedido.
+Um áudio muito longo pode terminar de transcrever depois que a análise
+disparada pela mensagem seguinte já rodou; "Reanalisar" resolve.
+
+### Custo aproximado
+
+A cobrança é por token, na mesma conta da OpenRouter. Um modelo Gemini conta
+cerca de 32 tokens por segundo de áudio, ou seja, perto de 2.000 tokens por
+minuto, mais o texto devolvido. Nos modelos "flash-lite" isso dá, em ordem de
+grandeza, **menos de US$ 0,002 por minuto de áudio** (100 áudios de 1 minuto
+custam centavos de dólar). É uma estimativa: o preço vigente está na página do
+modelo na OpenRouter, e outro modelo em `AI_AUDIO_MODEL` muda a conta.
+
+### Trocar o modelo
+
+`AI_AUDIO_MODEL` aceita qualquer modelo da OpenRouter com entrada de áudio. A
+chamada é sempre pela OpenRouter, mesmo com `AI_PROVIDER=anthropic`, então
+`OPENROUTER_API_KEY` precisa existir.
 
 ## Contexto para a IA
 
@@ -495,6 +580,7 @@ src/
   components/                 Fila, Conversa, Funil, OportunidadeDetalhe, Retomar, SugestoesIA, Shell…
   lib/
     ia.ts                     camada de IA (OpenRouter | Anthropic)
+    transcricao.ts            transcrição de áudio pela OpenRouter (só servidor, testado)
     analise/contexto.ts       monta o prompt: documentos + conversa (puro, testado)
     analise/executar.ts       roda a análise e grava no banco
     analise/oportunidade.ts   leitura comercial da IA: limites e textos (puro, testado)
@@ -511,6 +597,7 @@ src/
     contexto/fontes.ts        fontes no rationale da sugestão (puro, testado)
     whatsapp/parser.ts        interpreta webhooks (ponte e Z-API; puro, testado)
     whatsapp/processar.ts     contato → atendimento → mensagem
+    whatsapp/pos-mensagem.ts  depois de gravar: transcrever e então analisar (puro, testado)
     whatsapp/zapi.ts          cliente da Z-API
     supabase/                 clientes (navegador, servidor, serviço)
 tests/                        vitest

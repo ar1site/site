@@ -8,7 +8,8 @@
 //      o QR em PNG, sobe no Storage e abre na tela.
 //   2. Servidor HTTP em 127.0.0.1:PORTA (POST /evolution) recebe os eventos da
 //      Evolution, normaliza (normalizar.mjs), sobe mídia no Storage e repassa
-//      ao painel (bridge.message / bridge.status / bridge.qr).
+//      ao painel (bridge.message / bridge.status / bridge.qr). Áudio é convertido
+//      para MP3 com o ffmpeg antes de subir (audio.mjs); se não der, vai o original.
 //   3. A cada 3 s lê a fila ar1_wa_outbox (status queued) e envia pelo WhatsApp.
 //   4. Heartbeat a cada 5 min (connectionState -> bridge.status).
 //
@@ -19,6 +20,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { criarPreparadorDeMidia } from "./audio.mjs";
 import {
   BUCKET,
   CAMINHO_QR,
@@ -101,6 +103,8 @@ function montarConfig() {
     urlDaPonteParaDocker: (env.PONTE_URL_DOCKER || `http://host.docker.internal:${porta}/evolution`).trim(),
     // ABRIR_QR=0 desliga a abertura automática do PNG na tela (útil em testes).
     abrirQr: (env.ABRIR_QR ?? "1").trim() !== "0",
+    // Programa usado para converter áudio em MP3. Padrão: "ffmpeg" do PATH.
+    ffmpeg: (env.FFMPEG ?? "").trim() || "ffmpeg",
   };
 }
 
@@ -502,22 +506,32 @@ async function buscarOutboxPorExternalId(externalId) {
   }
 }
 
+/** Prepara a mídia para subir (áudio vira MP3). Criado na partida, depois de ler a configuração. */
+let prepararMidia = null;
+
 async function tratarMensagem(resultado) {
   const { mensagem, midia } = resultado;
 
   if (midia) {
     try {
       let base64 = midia.base64;
-      let mime = midia.mime;
+      let mimeReal = null;
       if (!base64) {
         const r = await obterBase64DaMidia(midia.key);
         base64 = r.base64;
-        if (r.mime) mime = r.mime;
+        mimeReal = r.mime;
       }
       const buffer = Buffer.from(base64, "base64");
       if (buffer.length === 0) throw new Error("mídia vazia");
-      await subirNoStorage(midia.caminho, buffer, mime);
-      log.info(`mídia ${mensagem.kind} salva em ${mensagem.media_path} (${Math.round(buffer.length / 1024)} KB)`);
+      // O caminho e o mime finais saem daqui, depois da tentativa de conversão: o painel
+      // recebe o que foi realmente salvo (.mp3 / audio/mpeg quando a conversão deu certo).
+      const arquivo = await prepararMidia({ kind: mensagem.kind, caminho: midia.caminho, mime: midia.mime, mimeReal, buffer });
+      mensagem.media_path = await subirNoStorage(arquivo.caminho, arquivo.buffer, arquivo.mime);
+      mensagem.media_mime = arquivo.mime;
+      log.info(
+        `mídia ${mensagem.kind} salva em ${mensagem.media_path} (${Math.round(arquivo.buffer.length / 1024)} KB` +
+          `${arquivo.convertido ? `, convertida de ${Math.round(buffer.length / 1024)} KB` : ""})`,
+      );
     } catch (e) {
       log.erro(`não consegui salvar a mídia de ${mensagem.external_id}: ${erroCurto(e)}`);
       mensagem.media_path = null; // a mensagem vai sem o arquivo; body/mime ficam
@@ -857,6 +871,7 @@ async function principal() {
 
   log.info(`ponte iniciando — instância "${cfg.instancia}", Evolution ${cfg.evolutionUrl}, porta ${cfg.porta}`);
   log.info(`log em ${ARQUIVO_LOG}; QR em ${ARQUIVO_QR}`);
+  prepararMidia = criarPreparadorDeMidia({ ffmpeg: cfg.ffmpeg, avisar: (m) => log.aviso(m) });
 
   servidor = criarServidor();
   await new Promise((resolve, reject) => {

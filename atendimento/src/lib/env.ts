@@ -10,6 +10,9 @@ function obrigatoria(nome: string): string {
   return valor;
 }
 
+/** Modelo padrão da transcrição de áudio (AI_AUDIO_MODEL). */
+export const MODELO_AUDIO_PADRAO = "google/gemini-3.5-flash-lite";
+
 export type ProvedorIA = "openrouter" | "anthropic";
 export type ProvedorWhatsapp = "bridge" | "zapi";
 
@@ -35,6 +38,10 @@ export const env = {
     return this.aiProvider === "anthropic"
       ? process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5"
       : "anthropic/claude-sonnet-5.5";
+  },
+  /** Modelo com entrada de áudio usado na transcrição (sempre pela OpenRouter). */
+  get aiAudioModel(): string {
+    return (process.env.AI_AUDIO_MODEL ?? "").trim() || MODELO_AUDIO_PADRAO;
   },
   get openrouterApiKey() {
     return obrigatoria("OPENROUTER_API_KEY");

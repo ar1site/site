@@ -27,7 +27,8 @@ const contato = {
 describe("descreverMensagem", () => {
   it("rotula mídias sem conteúdo textual", () => {
     expect(descreverMensagem(msg({ direction: "in", kind: "audio" }))).toBe("[áudio sem transcrição]");
-    expect(descreverMensagem(msg({ direction: "in", kind: "audio", transcript: "oi" }))).toBe("[áudio transcrito] oi");
+    expect(descreverMensagem(msg({ direction: "in", kind: "audio", transcript: "oi" }))).toBe("[áudio] oi");
+    expect(descreverMensagem(msg({ direction: "in", kind: "audio", transcript: "   " }))).toBe("[áudio sem transcrição]");
     expect(descreverMensagem(msg({ direction: "in", kind: "image", body: "palco" }))).toBe("[imagem: palco]");
     expect(descreverMensagem(msg({ direction: "in", kind: "image" }))).toBe("[imagem sem legenda]");
     expect(descreverMensagem(msg({ direction: "in", kind: "document", media_name: "briefing.pdf" }))).toBe("[documento: briefing.pdf]");
@@ -60,6 +61,23 @@ describe("montarContexto", () => {
     expect(c.user).toContain("CONTATO: [áudio sem transcrição]");
     expect(c.ultimaFoiNossa).toBe(false);
     expect(c.user).toContain("A última mensagem foi do contato");
+  });
+
+  it("áudio com transcrição entra na conversa como [áudio] + texto; sem transcrição, fica o aviso", () => {
+    const c = montarContexto({
+      contato,
+      mensagens: [
+        msg({ direction: "in", kind: "audio", transcript: "Quero gravar um podcast em outubro, quanto fica?" }),
+        msg({ direction: "out", kind: "audio", sent_by: "celular", transcript: "Te mando a proposta amanhã." }),
+        msg({ direction: "in", kind: "audio" }),
+      ],
+      instrucoes: "",
+      servicos: [],
+    });
+    expect(c.user).toContain("CONTATO: [áudio] Quero gravar um podcast em outubro, quanto fica?");
+    expect(c.user).toContain("AR1 (celular): [áudio] Te mando a proposta amanhã.");
+    expect(c.user).toContain("CONTATO: [áudio sem transcrição]");
+    expect(c.user).not.toContain("[áudio transcrito]");
   });
 
   it("detecta quando a última mensagem foi nossa", () => {

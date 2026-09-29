@@ -1,6 +1,8 @@
 import { after, NextResponse } from "next/server";
 import { env } from "@/lib/env";
+import { transcreverMensagem } from "@/lib/transcricao";
 import { interpretarWebhook } from "@/lib/whatsapp/parser";
+import { executarPosMensagem, planejarPosMensagem } from "@/lib/whatsapp/pos-mensagem";
 import {
   gravarQr,
   gravarStatusConexaoSeMudou,
@@ -13,7 +15,10 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-/** Espera curta para juntar uma rajada de mensagens numa análise só. */
+/**
+ * Espera curta para juntar uma rajada de mensagens numa análise só. Conta a partir da
+ * chegada da mensagem: o tempo gasto transcrevendo um áudio é descontado.
+ */
 const ESPERA_ANALISE_MS = 40_000;
 
 const OK = NextResponse.json({ ok: true });
@@ -26,8 +31,8 @@ function dormir(ms: number) {
  * Depois de responder ao webhook: espera, relê o atendimento e só analisa
  * se nenhuma mensagem nova do contato chegou nesse meio-tempo.
  */
-async function agendarAnalise(atendimentoId: string, sentAtIso: string) {
-  await dormir(ESPERA_ANALISE_MS);
+async function agendarAnalise(atendimentoId: string, sentAtIso: string, esperaMs = ESPERA_ANALISE_MS) {
+  await dormir(esperaMs);
   const { data } = await supabaseServico()
     .from("ar1_atendimentos")
     .select("last_inbound_at, ai_analysis_due_at, status")
@@ -100,11 +105,22 @@ export async function POST(request: Request, ctx: RouteContext<"/api/whatsapp/we
     switch (resultado.tipo) {
       case "mensagem": {
         const r = await processarMensagem(resultado.mensagem, payload);
-        // Histórico importado não dispara análise automática (o importador pede uma por conversa no fim).
-        if (r.situacao === "gravada" && r.entrada && r.atendimentoId && !resultado.mensagem.historico) {
-          const atendimentoId = r.atendimentoId;
+        // Histórico importado não dispara transcrição nem análise automática (o importador
+        // pede uma análise por conversa no fim; áudio antigo se transcreve pelo botão).
+        const plano = planejarPosMensagem(resultado.mensagem, r);
+        if (plano.transcrever || plano.analisar) {
+          const { atendimentoId, mensagemId } = r;
           const sentAtIso = resultado.mensagem.sentAt.toISOString();
-          after(() => agendarAnalise(atendimentoId, sentAtIso));
+          // Ordem: primeiro transcreve e grava `transcript`, depois espera e analisa, para a
+          // análise sempre enxergar o texto do áudio. Se a transcrição falhar, a análise segue.
+          after(() =>
+            executarPosMensagem(plano, ESPERA_ANALISE_MS, {
+              transcrever: () => transcreverMensagem(mensagemId ?? ""),
+              esperarEAnalisar: (esperaMs) => agendarAnalise(atendimentoId ?? "", sentAtIso, esperaMs),
+              aoFalharTranscricao: (e) =>
+                console.error("[webhook] transcrição falhou", mensagemId, e instanceof Error ? e.message : e),
+            }),
+          );
         }
         break;
       }

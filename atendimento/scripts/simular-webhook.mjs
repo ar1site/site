@@ -137,7 +137,7 @@ function baseBridge(extra) {
 const cenariosBridge = {
   texto: () => baseBridge({ body: texto }),
   imagem: () => baseBridge({ kind: "image", body: "nosso palco", media_path: `ar1-wa-media/${telefone}/simulada.jpg`, media_mime: "image/jpeg" }),
-  audio: () => baseBridge({ kind: "audio", media_path: `ar1-wa-media/${telefone}/simulado.ogg`, media_mime: "audio/ogg" }),
+  audio: () => baseBridge({ kind: "audio", media_path: `ar1-wa-media/${telefone}/simulado.mp3`, media_mime: "audio/mpeg" }),
   documento: () =>
     baseBridge({ kind: "document", media_path: `ar1-wa-media/${telefone}/briefing.pdf`, media_mime: "application/pdf", media_name: "briefing.pdf" }),
   enviada: () => baseBridge({ from_me: true, sender_name: "AR1 Films", body: "Bom dia! Vou te passar as opções.", outbox_id: outboxId }),

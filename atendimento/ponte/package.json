@@ -9,6 +9,6 @@
   },
   "scripts": {
     "start": "node ponte.mjs",
-    "test": "node --test normalizar.test.mjs"
+    "test": "node --test normalizar.test.mjs audio.test.mjs"
   }
 }
