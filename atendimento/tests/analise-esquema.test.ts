@@ -11,6 +11,15 @@ const valida = {
   reply: "Olá!",
   rationale: "Pediu preço.",
   fontes: ["Tabela de preços 2026"],
+  // Obrigatório desde o funil; os campos podem vir nulos (tests/sugestoes-ia.test.ts).
+  oportunidade: {
+    etapa_sugerida: null,
+    valor_estimado: null,
+    probabilidade: null,
+    proxima_acao: null,
+    proxima_acao_em: null,
+    motivo: "",
+  },
 };
 
 describe("esquemaAnalise", () => {

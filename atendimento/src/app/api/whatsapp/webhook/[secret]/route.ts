@@ -3,7 +3,7 @@ import { env } from "@/lib/env";
 import { interpretarWebhook } from "@/lib/whatsapp/parser";
 import {
   gravarQr,
-  gravarStatusConexao,
+  gravarStatusConexaoSeMudou,
   processarMensagem,
   registrarEvento,
 } from "@/lib/whatsapp/processar";
@@ -72,6 +72,24 @@ export async function POST(request: Request, ctx: RouteContext<"/api/whatsapp/we
 
   const resultado = interpretarWebhook(payload);
 
+  // Aviso de conexão repetido não grava nada (nem evento, nem estado): em 29/09/2026 uma
+  // enxurrada desses avisos gravou 48 mil linhas em 30 minutos e derrubou o banco.
+  if (resultado.tipo === "conexao") {
+    try {
+      const gravou = await gravarStatusConexaoSeMudou({
+        connected: resultado.connected,
+        checked_at: resultado.checkedAt,
+        state: resultado.state,
+        phone: resultado.phone,
+        error: resultado.erro,
+      });
+      if (gravou) await registrarEvento(resultado.evento, payload);
+    } catch (e) {
+      console.error("[webhook] erro ao gravar estado da conexão", e);
+    }
+    return OK;
+  }
+
   try {
     await registrarEvento(resultado.evento, payload);
   } catch (e) {
@@ -90,16 +108,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/whatsapp/we
         }
         break;
       }
-      case "conexao": {
-        await gravarStatusConexao({
-          connected: resultado.connected,
-          checked_at: resultado.checkedAt,
-          state: resultado.state,
-          phone: resultado.phone,
-          error: resultado.erro,
-        });
-        break;
-      }
+      case "conexao":
+        break; // tratado acima
       case "qr": {
         await gravarQr({ media_path: resultado.mediaPath, updated_at: resultado.updatedAt });
         break;

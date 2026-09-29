@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { separarFontes } from "@/lib/contexto/fontes";
 import { useEquipe } from "@/lib/equipe";
 import {
@@ -14,6 +22,8 @@ import {
   ROTULO_STATUS,
   tempoRelativo,
 } from "@/lib/formato";
+import { normalizarOportunidade } from "@/lib/funil/dados";
+import { ETAPAS_ABERTAS } from "@/lib/funil/etapas";
 import { useRealtime } from "@/lib/realtime";
 import { supabaseNoNavegador } from "@/lib/supabase/browser";
 import type {
@@ -21,6 +31,7 @@ import type {
   Contato,
   DadosExtraidos,
   Mensagem,
+  Oportunidade,
   Outcome,
   Outbox,
   StatusAtendimento,
@@ -28,7 +39,8 @@ import type {
 } from "@/lib/tipos";
 import { Balao, BalaoFila } from "./Balao";
 import { ContextoDocs } from "./ContextoDocs";
-import { Avatar, SeloKind, SeloServico, SeloStatus, SeloUrgencia } from "./Selos";
+import { OportunidadeNaConversa } from "./OportunidadeNaConversa";
+import { Avatar, SeloEtapa, SeloKind, SeloServico, SeloStatus, SeloUrgencia } from "./Selos";
 import { useUsuarioAtual } from "./Shell";
 
 /** Mesmo ponto de quebra do `xl` do Tailwind: acima dele o painel lateral aparece. */
@@ -55,6 +67,10 @@ interface Estado {
   mensagens: Mensagem[];
   sugestao: Sugestao | null;
   fila: Outbox[];
+  /** Oportunidade do funil ligada a esta conversa. */
+  oportunidade: Oportunidade | null;
+  /** Oportunidades abertas do contato ainda não ligadas a esta conversa. */
+  oportunidadesDoContato: Oportunidade[];
 }
 
 async function chamarApi<T = unknown>(url: string, body: unknown): Promise<T> {
@@ -81,7 +97,8 @@ async function buscarConversa(atendimentoId: string): Promise<Estado | { erro: s
   if (error) return { erro: "Não foi possível abrir a conversa." };
   if (!at) return { erro: "Atendimento não encontrado." };
 
-  const [{ data: mensagens }, { data: sugestoes }, { data: fila }] = await Promise.all([
+  const ligada = (at as Atendimento).quote_request_id;
+  const [{ data: mensagens }, { data: sugestoes }, { data: fila }, { data: oportunidades }] = await Promise.all([
     supabase
       .from("ar1_wa_messages")
       .select("*")
@@ -101,14 +118,27 @@ async function buscarConversa(atendimentoId: string): Promise<Estado | { erro: s
       .eq("atendimento_id", atendimentoId)
       .in("status", ["queued", "sending", "failed"])
       .order("created_at", { ascending: true }),
+    // A oportunidade ligada ou, se não houver, as abertas do mesmo contato.
+    ligada
+      ? supabase.from("ar1_quote_requests").select("*").eq("id", ligada).limit(1)
+      : supabase
+          .from("ar1_quote_requests")
+          .select("*")
+          .eq("contact_id", (at as Atendimento).contact_id)
+          .in("status", [...ETAPAS_ABERTAS])
+          .order("updated_at", { ascending: false })
+          .limit(3),
   ]);
   const { contato, ...atendimento } = at as Atendimento & { contato: Contato };
+  const lidas = (oportunidades ?? []).map((o) => normalizarOportunidade(o as Record<string, unknown>));
   return {
     atendimento,
     contato,
     mensagens: (mensagens ?? []) as Mensagem[],
     sugestao: ((sugestoes ?? [])[0] as Sugestao | undefined) ?? null,
     fila: (fila ?? []) as Outbox[],
+    oportunidade: ligada ? (lidas[0] ?? null) : null,
+    oportunidadesDoContato: ligada ? [] : lidas,
   };
 }
 
@@ -160,6 +190,12 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
   useRealtime({
     tabelas: ["ar1_atendimentos"],
     filtro: `id=eq.${atendimentoId}`,
+    aoMudar: carregar,
+    intervaloMs: 120_000,
+  });
+  // Etapa, valor ou próxima ação mudaram no funil: o resumo acompanha.
+  useRealtime({
+    tabelas: ["ar1_quote_requests"],
     aoMudar: carregar,
     intervaloMs: 120_000,
   });
@@ -261,45 +297,6 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
     else await carregar();
   }
 
-  async function criarPedidoDeOrcamento() {
-    if (!estado) return;
-    const { atendimento, contato } = estado;
-    const ex = (atendimento.ai_extracted ?? {}) as DadosExtraidos;
-    const nome = (ex.nome || nomeDoContato(contato)).slice(0, 200);
-    const empresa = (ex.empresa || contato.company || "Não informada").slice(0, 200);
-    const tipo = (atendimento.ai_service || "A definir").slice(0, 100);
-    const data = ex.data_prevista && /^\d{4}-\d{2}-\d{2}$/.test(ex.data_prevista) ? ex.data_prevista : null;
-    const mensagem = [atendimento.ai_summary, ex.detalhes ? `Detalhes: ${ex.detalhes}` : null, ex.cidade ? `Cidade: ${ex.cidade}` : null, ex.orcamento_estimado ? `Orçamento mencionado: ${ex.orcamento_estimado}` : null]
-      .filter(Boolean)
-      .join("\n")
-      .slice(0, 5000);
-
-    setOcupado("orcamento");
-    const supabase = supabaseNoNavegador();
-    const { data: pedido, error } = await supabase
-      .from("ar1_quote_requests")
-      .insert({
-        name: nome,
-        phone: formatarTelefone(contato.phone),
-        company: empresa,
-        project_type: tipo,
-        expected_date: data,
-        message: mensagem || null,
-        source_path: "whatsapp",
-        assigned_to: atendimento.assigned_to ?? usuario.id,
-        client_id: contato.client_id,
-      })
-      .select("id")
-      .single();
-    if (error || !pedido) {
-      setOcupado(null);
-      mostrar("erro", `Não foi possível criar o pedido: ${error?.message ?? "erro"}`);
-      return;
-    }
-    await atualizarAtendimento({ quote_request_id: pedido.id }, "orcamento");
-    mostrar("ok", "Pedido de orçamento criado.");
-  }
-
   // --------------------------------------------------------------- render
 
   if (erroCarga) {
@@ -316,7 +313,7 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
     return <div className="flex h-full items-center justify-center text-sm text-apoio">Carregando conversa…</div>;
   }
 
-  const { atendimento, contato, mensagens, sugestao, fila } = estado;
+  const { atendimento, contato, mensagens, sugestao, fila, oportunidade, oportunidadesDoContato } = estado;
   const nome = nomeDoContato(contato);
   const fechado = atendimento.status === "fechado";
   const fontes = separarFontes(sugestao?.rationale).fontes;
@@ -327,8 +324,16 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
       fontes={fontes}
       ocupado={ocupado}
       aoReanalisar={() => analisar()}
-      aoCriarOrcamento={criarPedidoDeOrcamento}
-    />
+    >
+      <OportunidadeNaConversa
+        atendimento={atendimento}
+        contato={contato}
+        oportunidade={oportunidade}
+        outrasDoContato={oportunidadesDoContato}
+        usuarioId={usuario.id}
+        aoMudar={carregar}
+      />
+    </PainelAnalise>
   );
   // Um só por vez (celular ou desktop), para não buscar nem enviar em dobro.
   const contextoDoCliente = (ocultarTitulo: boolean) => (
@@ -376,10 +381,11 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
             <details className="cartao mb-3 xl:hidden">
               <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold">
                 Análise da IA
-                {atendimento.ai_kind && (
-                  <span className="ml-2 inline-flex gap-1 align-middle">
+                {(atendimento.ai_kind || oportunidade) && (
+                  <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
                     <SeloKind kind={atendimento.ai_kind} />
                     <SeloUrgencia urgencia={atendimento.ai_urgency} />
+                    <SeloEtapa etapa={oportunidade?.status} prefixo="Funil:" />
                   </span>
                 )}
               </summary>
@@ -619,14 +625,15 @@ function PainelAnalise({
   fontes,
   ocupado,
   aoReanalisar,
-  aoCriarOrcamento,
+  children,
 }: {
   atendimento: Atendimento;
   /** Documentos usados na sugestão pendente. */
   fontes: string[];
   ocupado: string | null;
   aoReanalisar: () => void;
-  aoCriarOrcamento: () => void;
+  /** Bloco da oportunidade do funil (criar, resumo e sugestões da IA). */
+  children?: ReactNode;
 }) {
   const ex = (atendimento.ai_extracted ?? {}) as DadosExtraidos;
   const entradas = (Object.keys(ROTULO_EXTRAIDO) as (keyof DadosExtraidos)[])
@@ -676,14 +683,8 @@ function PainelAnalise({
         <button type="button" className="botao botao-secundario py-1 text-xs" onClick={aoReanalisar} disabled={ocupado === "analisar"}>
           {ocupado === "analisar" ? "Analisando…" : analisada ? "Reanalisar" : "Analisar agora"}
         </button>
-        {atendimento.quote_request_id ? (
-          <span className="selo border-ok/60 text-ok">Pedido criado</span>
-        ) : (
-          <button type="button" className="botao botao-secundario py-1 text-xs" onClick={aoCriarOrcamento} disabled={ocupado === "orcamento"}>
-            Criar pedido de orçamento
-          </button>
-        )}
       </div>
+      {children}
     </div>
   );
 }

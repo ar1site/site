@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, type ReactNode } from "react";
+import { usePendentesDeRetomada } from "@/lib/followups/dados";
 import { supabaseNoNavegador } from "@/lib/supabase/browser";
 
 export interface UsuarioAtual {
@@ -21,14 +22,30 @@ export function useUsuarioAtual(): UsuarioAtual {
 
 const LINKS = [
   { href: "/", rotulo: "Fila", icone: IconeFila },
+  { href: "/funil", rotulo: "Funil", icone: IconeFunil },
+  { href: "/retomar", rotulo: "Retomar", icone: IconeRetomar },
   { href: "/contatos", rotulo: "Contatos", icone: IconeContatos },
   { href: "/configuracoes", rotulo: "Ajustes", icone: IconeAjustes },
 ] as const;
+
+/** Contador das retomadas pendentes: "9+" acima de nove, para caber no celular. */
+function Contador({ total, className = "" }: { total: number; className?: string }) {
+  if (total <= 0) return null;
+  return (
+    <span
+      className={`inline-flex min-w-[1.15rem] items-center justify-center rounded-full bg-cobre px-1 text-[10px] font-bold leading-[1.15rem] text-white ${className}`}
+      aria-label={`${total} ${total === 1 ? "retomada pendente" : "retomadas pendentes"}`}
+    >
+      {total > 9 ? "9+" : total}
+    </span>
+  );
+}
 
 export function Shell({ usuario, children }: { usuario: UsuarioAtual; children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const naConversa = pathname.startsWith("/atendimento/");
+  const pendentes = usePendentesDeRetomada();
 
   async function sair() {
     await supabaseNoNavegador().auth.signOut();
@@ -62,7 +79,8 @@ export function Shell({ usuario, children }: { usuario: UsuarioAtual; children: 
                 }`}
               >
                 <l.icone />
-                {l.rotulo}
+                <span className="flex-1">{l.rotulo}</span>
+                {l.href === "/retomar" && <Contador total={pendentes} />}
               </Link>
             ))}
           </nav>
@@ -100,12 +118,16 @@ export function Shell({ usuario, children }: { usuario: UsuarioAtual; children: 
               <Link
                 key={l.href}
                 href={l.href}
-                className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${
+                aria-current={ativo(l.href) ? "page" : undefined}
+                className={`flex min-w-0 flex-1 basis-0 flex-col items-center gap-0.5 px-0.5 py-2 text-[10.5px] font-medium leading-tight ${
                   ativo(l.href) ? "text-cobre-claro" : "text-apoio"
                 }`}
               >
-                <l.icone />
-                {l.rotulo}
+                <span className="relative">
+                  <l.icone />
+                  {l.href === "/retomar" && <Contador total={pendentes} className="absolute -right-3 -top-1.5" />}
+                </span>
+                <span className="max-w-full truncate">{l.rotulo}</span>
               </Link>
             ))}
           </nav>
@@ -119,6 +141,22 @@ function IconeFila() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+function IconeFunil() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 4h18l-7 8.5V19l-4 2v-8.5z" />
+    </svg>
+  );
+}
+function IconeRetomar() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 4v5h5" />
+      <path d="M12 8v4l2.5 2.5" />
     </svg>
   );
 }

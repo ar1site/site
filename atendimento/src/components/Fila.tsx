@@ -6,8 +6,9 @@ import { useEquipe } from "@/lib/equipe";
 import { formatarTelefone, nomeDoContato, somenteDigitos, tempoRelativo } from "@/lib/formato";
 import { useRealtime } from "@/lib/realtime";
 import { supabaseNoNavegador } from "@/lib/supabase/browser";
-import type { AtendimentoDaFila, StatusAtendimento } from "@/lib/tipos";
-import { Avatar, SeloKind, SeloServico, SeloUrgencia } from "./Selos";
+import { ehEtapa } from "@/lib/funil/etapas";
+import type { AtendimentoDaFila, EtapaFunil, StatusAtendimento } from "@/lib/tipos";
+import { Avatar, SeloEtapa, SeloKind, SeloServico, SeloUrgencia } from "./Selos";
 
 type Aba = "todos" | StatusAtendimento;
 
@@ -49,7 +50,20 @@ async function buscarFila(conjunto: Conjunto): Promise<{ itens: AtendimentoDaFil
   q = conjunto === "fechados" ? q.eq("status", "fechado") : q.neq("status", "fechado");
   const { data, error } = await q;
   if (error) return { erro: "Não foi possível carregar a fila. Tentando de novo em instantes." };
-  return { itens: (data ?? []) as AtendimentoDaFila[] };
+  const itens = (data ?? []) as AtendimentoDaFila[];
+
+  // Etapa do funil das conversas que têm oportunidade (vira selo no cartão).
+  const ids = [...new Set(itens.map((a) => a.quote_request_id).filter((id): id is string => Boolean(id)))];
+  if (ids.length) {
+    const { data: oportunidades } = await supabase
+      .from("ar1_quote_requests")
+      .select("id, status")
+      .in("id", ids.slice(0, 300));
+    const etapaPorId = new Map<string, EtapaFunil>();
+    for (const o of oportunidades ?? []) if (ehEtapa(o.status)) etapaPorId.set(o.id as string, o.status);
+    for (const a of itens) a.etapa_funil = a.quote_request_id ? (etapaPorId.get(a.quote_request_id) ?? null) : null;
+  }
+  return { itens };
 }
 
 export function Fila({ compacta = false, selecionadoId }: { compacta?: boolean; selecionadoId?: string }) {
@@ -93,7 +107,7 @@ export function Fila({ compacta = false, selecionadoId }: { compacta?: boolean; 
   }, [conjunto]);
 
   useRealtime({
-    tabelas: ["ar1_atendimentos", "ar1_wa_messages", "ar1_ai_suggestions"],
+    tabelas: ["ar1_atendimentos", "ar1_wa_messages", "ar1_ai_suggestions", "ar1_quote_requests"],
     aoMudar: carregar,
   });
 
@@ -180,11 +194,12 @@ export function Fila({ compacta = false, selecionadoId }: { compacta?: boolean; 
                   <p className="truncate text-xs text-apoio">
                     {a.contato?.company || formatarTelefone(a.contato?.phone)}
                   </p>
-                  {(a.ai_kind || a.ai_service || a.ai_urgency) && (
+                  {(a.ai_kind || a.ai_service || a.ai_urgency || a.etapa_funil) && (
                     <div className="mt-1 flex flex-wrap gap-1">
                       <SeloKind kind={a.ai_kind} />
                       <SeloServico servico={a.ai_service} />
                       <SeloUrgencia urgencia={a.ai_urgency} />
+                      <SeloEtapa etapa={a.etapa_funil} prefixo="Funil:" />
                     </div>
                   )}
                   {a.ai_summary && (

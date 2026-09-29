@@ -62,6 +62,8 @@ export interface DadosExtraidos {
   data_prevista?: string | null;
   orcamento_estimado?: string | null;
   detalhes?: string | null;
+  /** Sugestões comerciais da IA (funil). Só viram dado da oportunidade quando alguém aceita. */
+  oportunidade?: OportunidadeIA | null;
 }
 
 export interface Atendimento {
@@ -133,6 +135,8 @@ export interface MembroEquipe {
 export interface AtendimentoDaFila extends Atendimento {
   contato: Contato;
   sugestoes_pendentes: { id: string }[];
+  /** Etapa da oportunidade ligada (preenchida pela tela, não vem do banco). */
+  etapa_funil?: EtapaFunil | null;
 }
 
 export interface StatusWhatsapp {
@@ -201,4 +205,84 @@ export interface DocContextoResumo extends Omit<DocContexto, "content"> {
   chars: number;
   /** Primeiros 200 caracteres do texto. */
   previa: string;
+}
+
+// ------------------------------------------------------------ funil de vendas
+
+export type EtapaFunil =
+  | "new"
+  | "qualified"
+  | "contacting"
+  | "proposal"
+  | "negotiating"
+  | "won"
+  | "lost";
+
+export type OrigemOportunidade = "site" | "whatsapp" | "indicacao" | "outro";
+
+/** Linha de public.ar1_quote_requests (a oportunidade do funil). */
+export interface Oportunidade {
+  id: string;
+  name: string;
+  phone: string;
+  company: string;
+  email: string | null;
+  project_type: string;
+  expected_date: string | null;
+  message: string | null;
+  source_path: string | null;
+  status: EtapaFunil;
+  internal_notes: string | null;
+  assigned_to: string | null;
+  client_id: string | null;
+  contact_id: string | null;
+  source: OrigemOportunidade;
+  estimated_value: number | null;
+  probability: number | null;
+  next_action: string | null;
+  next_action_at: string | null;
+  lost_reason: string | null;
+  ai_notes: string | null;
+  stage_changed_at: string;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Sugestão comercial da IA, guardada em ar1_atendimentos.ai_extracted.oportunidade. */
+export interface OportunidadeIA {
+  etapa_sugerida: EtapaFunil | null;
+  valor_estimado: number | null;
+  probabilidade: number | null;
+  proxima_acao: string | null;
+  /** ISO 8601. */
+  proxima_acao_em: string | null;
+  motivo: string;
+  /** Quando a IA fez esta leitura (ISO). */
+  analisada_em?: string | null;
+}
+
+// ----------------------------------------------------------------- follow-ups
+
+export type PrioridadeFollowup = "alta" | "media" | "baixa";
+export type StatusFollowup = "pendente" | "enviado" | "adiado" | "descartado";
+
+/** Linha de public.ar1_followups. */
+export interface Followup {
+  id: string;
+  contact_id: string;
+  atendimento_id: string | null;
+  quote_request_id: string | null;
+  reason: string;
+  suggested_text: string;
+  priority: PrioridadeFollowup;
+  due_at: string;
+  status: StatusFollowup;
+  final_text: string | null;
+  outbox_id: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  model: string | null;
+  created_at: string;
+  updated_at: string;
 }

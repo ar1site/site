@@ -5,8 +5,23 @@ import { anexarFontes, filtrarFontes } from "../contexto/fontes";
 import type { DocParaPrompt } from "../contexto/orcamento";
 import { ErroIA, gerarEstruturado } from "../ia";
 import { supabaseServico } from "../supabase/service";
-import type { Atendimento, Contato, DadosExtraidos, DocContexto, Mensagem } from "../tipos";
+import type {
+  Atendimento,
+  Contato,
+  DadosExtraidos,
+  DocContexto,
+  Mensagem,
+  Oportunidade,
+  OportunidadeIA,
+} from "../tipos";
 import { LIMITE_MENSAGENS, montarContexto } from "./contexto";
+import { esquemaOportunidadeIA } from "./oportunidade-esquema";
+import {
+  normalizarOportunidadeIA,
+  OPORTUNIDADE_IA_VAZIA,
+  temSugestao,
+  textoNotasIA,
+} from "./oportunidade";
 
 export class ErroAnalise extends Error {
   constructor(
@@ -37,10 +52,29 @@ export function esquemaAnalise(servicos: string[]) {
     rationale: z.string(),
     /** Títulos dos documentos realmente usados (pode ser vazio). */
     fontes: z.array(z.string()),
+    /** Leitura comercial para o funil: só sugestões, os campos podem vir nulos. */
+    oportunidade: esquemaOportunidadeIA,
   });
 }
 
 export type ResultadoAnalise = z.infer<ReturnType<typeof esquemaAnalise>>;
+
+/** Tipos de contato que não entram no funil: a leitura comercial é descartada. */
+const KINDS_SEM_FUNIL = new Set(["spam", "pessoal", "fornecedor"]);
+
+/**
+ * Leitura comercial que vale depois das regras do código: limites aplicados e
+ * nada de sugestão para quem não é assunto comercial.
+ */
+export function oportunidadeDaAnalise(
+  analise: Pick<ResultadoAnalise, "kind" | "oportunidade">,
+  agora: Date,
+): OportunidadeIA {
+  const bruta = KINDS_SEM_FUNIL.has(analise.kind)
+    ? { ...OPORTUNIDADE_IA_VAZIA, motivo: analise.oportunidade?.motivo ?? "" }
+    : analise.oportunidade;
+  return normalizarOportunidadeIA(bruta, agora.toISOString());
+}
 
 export async function lerConfiguracoesDeAtendimento(): Promise<{
   instrucoes: string;
@@ -98,6 +132,26 @@ export async function lerDocumentosDeContexto(
   return { baseConhecimento, contextoCliente };
 }
 
+type OportunidadeLigada = Pick<
+  Oportunidade,
+  "id" | "status" | "estimated_value" | "probability" | "next_action" | "next_action_at" | "project_type"
+>;
+
+/** Oportunidade do funil ligada à conversa. Falha de leitura não derruba a análise. */
+async function lerOportunidadeLigada(id: string | null): Promise<OportunidadeLigada | null> {
+  if (!id) return null;
+  const { data, error } = await supabaseServico()
+    .from("ar1_quote_requests")
+    .select("id, status, estimated_value, probability, next_action, next_action_at, project_type")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    console.error("[analise] não foi possível ler a oportunidade ligada:", error.message);
+    return null;
+  }
+  return (data as OportunidadeLigada | null) ?? null;
+}
+
 /**
  * Analisa um atendimento com a IA e grava o resultado. Lança ErroAnalise
  * com mensagem legível (já registrada em ai_error) quando falha.
@@ -117,7 +171,7 @@ export async function analisarAtendimento(
   if (!atendimentoBruto) throw new ErroAnalise("Atendimento não encontrado.", 404);
   const atendimento = atendimentoBruto as Atendimento;
 
-  const [{ data: contatoBruto }, { data: mensagensBrutas }, config, documentos] = await Promise.all([
+  const [{ data: contatoBruto }, { data: mensagensBrutas }, config, documentos, oportunidadeAtual] = await Promise.all([
     db.from("ar1_wa_contacts").select("*").eq("id", atendimento.contact_id).maybeSingle(),
     db
       .from("ar1_wa_messages")
@@ -127,6 +181,7 @@ export async function analisarAtendimento(
       .limit(LIMITE_MENSAGENS),
     lerConfiguracoesDeAtendimento(),
     lerDocumentosDeContexto(atendimento.contact_id),
+    lerOportunidadeLigada(atendimento.quote_request_id),
   ]);
   if (!contatoBruto) throw new ErroAnalise("Contato do atendimento não encontrado.", 404);
   const contato = contatoBruto as Contato;
@@ -141,6 +196,7 @@ export async function analisarAtendimento(
     instrucaoExtra,
     baseConhecimento: documentos.baseConhecimento,
     contextoCliente: documentos.contextoCliente,
+    oportunidadeAtual,
   });
 
   let analise: ResultadoAnalise;
@@ -173,6 +229,10 @@ export async function analisarAtendimento(
   // Só valem como fonte os documentos que de fato foram para o prompt.
   const fontes = filtrarFontes(analise.fontes, contexto.titulosDosDocumentos);
 
+  const agoraData = new Date();
+  // Só sugestão: fica guardada na conversa até alguém aceitar campo a campo.
+  const oportunidade = oportunidadeDaAnalise(analise, agoraData);
+
   const extracted: DadosExtraidos = {
     nome: analise.extracted.nome,
     empresa: analise.extracted.empresa,
@@ -180,9 +240,10 @@ export async function analisarAtendimento(
     data_prevista: analise.extracted.data_prevista,
     orcamento_estimado: analise.extracted.orcamento_estimado,
     detalhes: analise.extracted.detalhes,
+    oportunidade,
   };
 
-  const agora = new Date().toISOString();
+  const agora = agoraData.toISOString();
   const { error: erroUpd } = await db
     .from("ar1_atendimentos")
     .update({
@@ -197,6 +258,20 @@ export async function analisarAtendimento(
     })
     .eq("id", atendimentoId);
   if (erroUpd) throw new ErroAnalise(`Erro ao gravar a análise: ${erroUpd.message}`, 500);
+
+  // Conversa ligada a uma oportunidade: registra a leitura da IA em ai_notes.
+  // Etapa, valor, probabilidade e próxima ação NÃO são alterados aqui.
+  if (oportunidadeAtual && (temSugestao(oportunidade) || analise.summary.trim())) {
+    const { error: erroNotas } = await db
+      .from("ar1_quote_requests")
+      .update({
+        ai_notes: textoNotasIA({ resumo: analise.summary, oportunidade, agora: agoraData }),
+      })
+      .eq("id", oportunidadeAtual.id);
+    if (erroNotas) {
+      console.error("[analise] não foi possível gravar a leitura da IA na oportunidade:", erroNotas.message);
+    }
+  }
 
   let sugestaoId: string | null = null;
   if (reply) {
@@ -221,7 +296,7 @@ export async function analisarAtendimento(
   }
 
   return {
-    analise: { ...analise, reply, extracted: analise.extracted, fontes },
+    analise: { ...analise, reply, extracted: analise.extracted, fontes, oportunidade },
     sugestaoId,
     modelo,
   };

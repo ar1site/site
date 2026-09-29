@@ -5,7 +5,15 @@ import {
   ROTULO_STATUS,
   ROTULO_URGENCIA,
 } from "@/lib/formato";
-import type { AiKind, AiUrgency, StatusAtendimento } from "@/lib/tipos";
+import { ROTULO_ETAPA, ROTULO_ORIGEM } from "@/lib/funil/etapas";
+import type {
+  AiKind,
+  AiUrgency,
+  EtapaFunil,
+  OrigemOportunidade,
+  PrioridadeFollowup,
+  StatusAtendimento,
+} from "@/lib/tipos";
 
 export function SeloKind({ kind }: { kind: AiKind | null }) {
   if (!kind) return null;
@@ -31,6 +39,50 @@ const CLASSE_STATUS: Record<StatusAtendimento, string> = {
 
 export function SeloStatus({ status }: { status: StatusAtendimento }) {
   return <span className={`selo ${CLASSE_STATUS[status]}`}>{ROTULO_STATUS[status]}</span>;
+}
+
+const CLASSE_ETAPA: Record<EtapaFunil, string> = {
+  new: "border-cobre/70 text-cobre-claro",
+  qualified: "border-apoio/60 text-texto",
+  contacting: "border-apoio/60 text-texto",
+  proposal: "border-alerta/60 text-alerta",
+  negotiating: "border-alerta/60 text-alerta",
+  won: "border-ok/60 text-ok",
+  lost: "border-erro/60 text-erro",
+};
+
+export function SeloEtapa({ etapa, prefixo }: { etapa: EtapaFunil | null | undefined; prefixo?: string }) {
+  if (!etapa || !ROTULO_ETAPA[etapa]) return null;
+  return (
+    <span className={`selo ${CLASSE_ETAPA[etapa]}`}>
+      {prefixo ? `${prefixo} ` : ""}
+      {ROTULO_ETAPA[etapa]}
+    </span>
+  );
+}
+
+export function SeloOrigem({ origem }: { origem: OrigemOportunidade | null | undefined }) {
+  if (!origem || !ROTULO_ORIGEM[origem]) return null;
+  return <span className="selo">{ROTULO_ORIGEM[origem]}</span>;
+}
+
+const ROTULO_PRIORIDADE: Record<PrioridadeFollowup, string> = {
+  alta: "Prioridade alta",
+  media: "Prioridade média",
+  baixa: "Prioridade baixa",
+};
+const CLASSE_PRIORIDADE: Record<PrioridadeFollowup, string> = {
+  alta: "border-erro/60 text-erro",
+  media: "border-alerta/60 text-alerta",
+  baixa: "border-apoio/50 text-apoio",
+};
+
+export function SeloPrioridade({ prioridade }: { prioridade: PrioridadeFollowup }) {
+  return (
+    <span className={`selo ${CLASSE_PRIORIDADE[prioridade] ?? ""}`}>
+      {ROTULO_PRIORIDADE[prioridade] ?? prioridade}
+    </span>
+  );
 }
 
 export function Avatar({ nome, foto, tamanho = 40 }: { nome: string; foto?: string | null; tamanho?: number }) {

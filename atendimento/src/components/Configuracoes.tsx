@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useEquipe } from "@/lib/equipe";
+import {
+  CHAVE_DIAS_SEM_RETORNO,
+  DIAS_SEM_RETORNO_MAX,
+  DIAS_SEM_RETORNO_MIN,
+  DIAS_SEM_RETORNO_PADRAO,
+  HORAS_UTEIS_SEM_RESPOSTA,
+  lerDiasSemRetorno,
+} from "@/lib/followups/candidatos";
 import { dataHora, tempoRelativo } from "@/lib/formato";
 import { supabaseNoNavegador } from "@/lib/supabase/browser";
 import { ContextoDocs } from "./ContextoDocs";
@@ -33,6 +41,7 @@ export function Configuracoes() {
       <h1 className="text-xl">Configurações</h1>
       <SecaoWhatsapp />
       <SecaoInstrucoes podeEditar={usuario.role === "admin"} />
+      <SecaoRetomadas podeEditar={usuario.role === "admin"} />
       <SecaoBaseDeConhecimento />
       <SecaoEquipe />
     </div>
@@ -240,6 +249,82 @@ function SecaoInstrucoes({ podeEditar }: { podeEditar: boolean }) {
             onChange={(e) => setServicos(e.target.value)}
             disabled={!carregado || !podeEditar}
           />
+        </label>
+        <div className="flex items-center gap-3">
+          <button type="submit" className="botao botao-primario" disabled={salvando || !carregado || !podeEditar}>
+            {salvando ? "Salvando…" : "Salvar"}
+          </button>
+          {aviso && <span className={`text-xs ${aviso === "Salvo." ? "text-ok" : "text-erro"}`}>{aviso}</span>}
+          {!podeEditar && <span className="text-xs text-apoio">Só administradores alteram.</span>}
+        </div>
+      </form>
+    </section>
+  );
+}
+
+// --------------------------------------------------------------- retomadas
+
+function SecaoRetomadas({ podeEditar }: { podeEditar: boolean }) {
+  const [dias, setDias] = useState(String(DIAS_SEM_RETORNO_PADRAO));
+  const [carregado, setCarregado] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabaseNoNavegador()
+      .from("ar1_settings")
+      .select("value")
+      .eq("key", CHAVE_DIAS_SEM_RETORNO)
+      .maybeSingle()
+      .then(({ data }) => {
+        setDias(String(lerDiasSemRetorno(data?.value)));
+        setCarregado(true);
+      });
+  }, []);
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    const n = Number(dias);
+    if (!Number.isInteger(n) || n < DIAS_SEM_RETORNO_MIN || n > DIAS_SEM_RETORNO_MAX) {
+      setAviso(`Use um número inteiro de ${DIAS_SEM_RETORNO_MIN} a ${DIAS_SEM_RETORNO_MAX}.`);
+      return;
+    }
+    setSalvando(true);
+    setAviso(null);
+    const { error } = await supabaseNoNavegador()
+      .from("ar1_settings")
+      .upsert(
+        { key: CHAVE_DIAS_SEM_RETORNO, value: n, updated_at: new Date().toISOString() },
+        { onConflict: "key" },
+      );
+    setSalvando(false);
+    setAviso(error ? `Não foi possível salvar: ${error.message}` : "Salvo.");
+  }
+
+  return (
+    <section className="cartao p-4">
+      <h2 className="mb-1 text-sm">Retomadas</h2>
+      <p className="mb-3 text-xs text-apoio">
+        Todo dia às 8 h a IA procura conversas paradas e deixa a mensagem pronta na tela Retomar. Ela só sugere:
+        quem envia é você. Cliente esperando resposta há mais de {HORAS_UTEIS_SEM_RESPOSTA} horas úteis entra sempre.
+      </p>
+      <form onSubmit={salvar} className="space-y-3">
+        <label className="block">
+          <span className="mb-1 block text-xs text-apoio">Dias sem retorno para sugerir retomada</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={DIAS_SEM_RETORNO_MIN}
+            max={DIAS_SEM_RETORNO_MAX}
+            step={1}
+            className="campo w-28 text-sm"
+            value={dias}
+            onChange={(e) => setDias(e.target.value)}
+            disabled={!carregado || !podeEditar}
+          />
+          <span className="mt-1 block text-[11px] text-apoio/80">
+            Vale para conversas em &ldquo;Aguardando cliente&rdquo;. Padrão: {DIAS_SEM_RETORNO_PADRAO} dias.
+          </span>
         </label>
         <div className="flex items-center gap-3">
           <button type="submit" className="botao botao-primario" disabled={salvando || !carregado || !podeEditar}>

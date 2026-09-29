@@ -60,6 +60,10 @@ export const env = {
   get webhookSecret() {
     return obrigatoria("WEBHOOK_SECRET");
   },
+  /** Segredo do cron da Vercel (opcional: sem ele, o cron não é aceito). */
+  get cronSecret(): string | null {
+    return process.env.CRON_SECRET || null;
+  },
 
   /** URL pública do próprio app, sem barra no fim. */
   get appUrl(): string {

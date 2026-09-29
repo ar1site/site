@@ -189,6 +189,38 @@ export async function gravarStatusConexao(valor: {
     .upsert({ key: "whatsapp.status", value: valor }, { onConflict: "key" });
 }
 
+/** Último estado gravado por esta instância do servidor (evita ler o banco a cada aviso). */
+let ultimoStatusGravado: { chave: string; em: number } | null = null;
+const INTERVALO_STATUS_REPETIDO_MS = 60_000;
+
+/**
+ * Segunda barreira contra enxurradas de avisos de conexão (a ponte já agrupa): estado igual
+ * ao último só é gravado de novo depois de 60 s. Devolve true quando gravou.
+ */
+export async function gravarStatusConexaoSeMudou(valor: Parameters<typeof gravarStatusConexao>[0]) {
+  const chave = `${valor.state ?? ""}|${valor.connected}`;
+  const agora = Date.now();
+  if (ultimoStatusGravado?.chave === chave && agora - ultimoStatusGravado.em < INTERVALO_STATUS_REPETIDO_MS) {
+    return false;
+  }
+  const { data } = await supabaseServico()
+    .from("ar1_settings")
+    .select("value")
+    .eq("key", "whatsapp.status")
+    .maybeSingle();
+  const atual = (data?.value ?? null) as { state?: string | null; connected?: boolean | null; checked_at?: string | null } | null;
+  if (atual && `${atual.state ?? ""}|${atual.connected}` === chave && atual.checked_at) {
+    const idade = agora - new Date(atual.checked_at).getTime();
+    if (idade >= 0 && idade < INTERVALO_STATUS_REPETIDO_MS) {
+      ultimoStatusGravado = { chave, em: agora };
+      return false;
+    }
+  }
+  await gravarStatusConexao(valor);
+  ultimoStatusGravado = { chave, em: agora };
+  return true;
+}
+
 export async function gravarQr(valor: { media_path: string | null; updated_at: string }) {
   await supabaseServico()
     .from("ar1_settings")

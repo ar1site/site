@@ -28,7 +28,11 @@ export interface PedidoEstruturado<T extends z.ZodType> {
   /** Nome curto do esquema (a-z, 0-9, _). */
   nomeEsquema: string;
   maxTokens?: number;
+  /** Tempo máximo de espera pela resposta (ms). Padrão: 50 s. */
+  timeoutMs?: number;
 }
+
+const TIMEOUT_PADRAO_MS = 50_000;
 
 export interface RespostaEstruturada<T> {
   dados: T;
@@ -101,7 +105,10 @@ interface RespostaChat {
   error?: { message?: string; code?: number | string };
 }
 
-async function chamarOpenRouter(body: Record<string, unknown>): Promise<RespostaChat> {
+async function chamarOpenRouter(
+  body: Record<string, unknown>,
+  timeoutMs = TIMEOUT_PADRAO_MS,
+): Promise<RespostaChat> {
   let resposta: Response;
   try {
     resposta = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -113,7 +120,7 @@ async function chamarOpenRouter(body: Record<string, unknown>): Promise<Resposta
         "X-Title": "AR1 Atendimento",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(50_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     const msg = e instanceof Error && e.name === "TimeoutError"
@@ -167,39 +174,45 @@ async function viaOpenRouter<T extends z.ZodType>(
   // 1ª tentativa: saída estruturada por response_format (json_schema, strict).
   let dados: RespostaChat;
   try {
-    dados = await chamarOpenRouter({
-      ...base,
-      response_format: {
-        type: "json_schema",
-        json_schema: { name: pedido.nomeEsquema, strict: true, schema },
+    dados = await chamarOpenRouter(
+      {
+        ...base,
+        response_format: {
+          type: "json_schema",
+          json_schema: { name: pedido.nomeEsquema, strict: true, schema },
+        },
       },
-    });
+      pedido.timeoutMs,
+    );
   } catch (e) {
     // CONFERIR: nem todo modelo/provedor na OpenRouter aceita response_format.
     // Se recusar (400), tentamos por function calling com tool_choice "auto"
     // (o "forçado" é rejeitado por alguns modelos Claude recentes).
     if (!(e instanceof ErroIA && e.status === 400)) throw e;
-    dados = await chamarOpenRouter({
-      ...base,
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: pedido.nomeEsquema,
-            description: "Registra a análise estruturada. Chame esta função exatamente uma vez.",
-            parameters: schema,
+    dados = await chamarOpenRouter(
+      {
+        ...base,
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: pedido.nomeEsquema,
+              description: "Registra a análise estruturada. Chame esta função exatamente uma vez.",
+              parameters: schema,
+            },
           },
-        },
-      ],
-      tool_choice: "auto",
-      messages: [
-        {
-          role: "system",
-          content: `${pedido.system}\n\nResponda SOMENTE chamando a função ${pedido.nomeEsquema}.`,
-        },
-        { role: "user", content: pedido.user },
-      ],
-    });
+        ],
+        tool_choice: "auto",
+        messages: [
+          {
+            role: "system",
+            content: `${pedido.system}\n\nResponda SOMENTE chamando a função ${pedido.nomeEsquema}.`,
+          },
+          { role: "user", content: pedido.user },
+        ],
+      },
+      pedido.timeoutMs,
+    );
   }
 
   const escolha = dados.choices?.[0];
@@ -226,7 +239,7 @@ async function viaOpenRouter<T extends z.ZodType>(
 let anthropic: Anthropic | null = null;
 function clienteAnthropic(): Anthropic {
   if (!anthropic) {
-    anthropic = new Anthropic({ apiKey: env.anthropicApiKey, maxRetries: 2, timeout: 50_000 });
+    anthropic = new Anthropic({ apiKey: env.anthropicApiKey, maxRetries: 2, timeout: TIMEOUT_PADRAO_MS });
   }
   return anthropic;
 }
@@ -256,20 +269,23 @@ async function viaAnthropic<T extends z.ZodType>(
 ): Promise<RespostaEstruturada<z.infer<T>>> {
   const modelo = env.aiModel;
   try {
-    const resposta = await clienteAnthropic().beta.messages.parse({
-      model: modelo,
-      max_tokens: pedido.maxTokens ?? 4096,
-      // Fallback automático por categoria caso os classificadores de segurança
-      // recusem a resposta (só na API da Anthropic).
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: {
-        effort: "medium",
-        format: betaZodOutputFormat(pedido.esquema),
+    const resposta = await clienteAnthropic().beta.messages.parse(
+      {
+        model: modelo,
+        max_tokens: pedido.maxTokens ?? 4096,
+        // Fallback automático por categoria caso os classificadores de segurança
+        // recusem a resposta (só na API da Anthropic).
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        output_config: {
+          effort: "medium",
+          format: betaZodOutputFormat(pedido.esquema),
+        },
+        system: [{ type: "text", text: pedido.system, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: pedido.user }],
       },
-      system: [{ type: "text", text: pedido.system, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: pedido.user }],
-    });
+      pedido.timeoutMs ? { timeout: pedido.timeoutMs } : undefined,
+    );
 
     if (resposta.stop_reason === "refusal") {
       throw new ErroIA("A IA não conseguiu analisar esta conversa (recusa de segurança).");

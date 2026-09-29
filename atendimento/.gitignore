@@ -45,3 +45,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# capturas de tela com dados simulados (scripts/capturar-telas.mjs)
+/capturas/

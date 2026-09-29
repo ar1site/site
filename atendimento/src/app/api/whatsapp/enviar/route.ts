@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { respostaNaoAutorizado, sessaoDaEquipe } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { supabaseServico } from "@/lib/supabase/service";
-import type { Atendimento, Contato, Sugestao } from "@/lib/tipos";
+import type { Atendimento, Contato, Followup, Sugestao } from "@/lib/tipos";
 import { enviarTexto, ErroZapi } from "@/lib/whatsapp/zapi";
 
 export const runtime = "nodejs";
@@ -21,27 +21,63 @@ function erro(mensagem: string, status = 400) {
  *     e devolve o resultado pelo webhook (bridge.message com outbox_id).
  *   - WHATSAPP_PROVIDER=zapi: chama a Z-API na hora e grava a mensagem.
  * Em ambos, a sugestão (se houver) é marcada como aprovada/editada.
+ *
+ * Com `followup_id` (tela Retomar), a mensagem é a retomada aprovada por uma
+ * pessoa: o follow-up passa a "enviado" com o texto final e o item da fila.
+ * Nesse caso `atendimento_id` é opcional: vale a conversa aberta do contato
+ * e, se não houver, a conversa em que a retomada foi sugerida.
  */
 export async function POST(request: Request) {
   const sessao = await sessaoDaEquipe();
   if (!sessao) return respostaNaoAutorizado();
 
-  let body: { atendimento_id?: unknown; text?: unknown; suggestion_id?: unknown } = {};
+  let body: {
+    atendimento_id?: unknown;
+    text?: unknown;
+    suggestion_id?: unknown;
+    followup_id?: unknown;
+  } = {};
   try {
     body = await request.json();
   } catch {
     // corpo vazio
   }
-  const atendimentoId = typeof body.atendimento_id === "string" ? body.atendimento_id : "";
+  let atendimentoId = typeof body.atendimento_id === "string" ? body.atendimento_id : "";
   const text = typeof body.text === "string" ? body.text.trim() : "";
   const suggestionId = typeof body.suggestion_id === "string" ? body.suggestion_id : null;
+  const followupId = typeof body.followup_id === "string" ? body.followup_id : null;
 
-  if (!UUID.test(atendimentoId)) return erro("Atendimento inválido.");
+  if (followupId && !UUID.test(followupId)) return erro("Retomada inválida.");
+  if (!followupId && !UUID.test(atendimentoId)) return erro("Atendimento inválido.");
+  if (atendimentoId && !UUID.test(atendimentoId)) return erro("Atendimento inválido.");
   if (!text) return erro("Escreva a mensagem antes de enviar.");
   if (text.length > 5000) return erro("A mensagem é longa demais (máximo 5000 caracteres).");
   if (suggestionId && !UUID.test(suggestionId)) return erro("Sugestão inválida.");
 
   const db = supabaseServico();
+
+  let followup: Followup | null = null;
+  if (followupId) {
+    const { data } = await db.from("ar1_followups").select("*").eq("id", followupId).maybeSingle();
+    followup = (data as Followup | null) ?? null;
+    if (!followup) return erro("Retomada não encontrada.", 404);
+    if (followup.status !== "pendente") {
+      return erro("Esta retomada já foi decidida. Atualize a tela.", 409);
+    }
+    if (!atendimentoId) {
+      const { data: aberto } = await db
+        .from("ar1_atendimentos")
+        .select("id")
+        .eq("contact_id", followup.contact_id)
+        .neq("status", "fechado")
+        .maybeSingle();
+      atendimentoId = aberto?.id ?? followup.atendimento_id ?? "";
+    }
+    if (!UUID.test(atendimentoId)) {
+      return erro("Este contato não tem conversa para receber a mensagem.", 409);
+    }
+  }
+
   const { data: atendimentoBruto } = await db
     .from("ar1_atendimentos")
     .select("*")
@@ -49,6 +85,28 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (!atendimentoBruto) return erro("Atendimento não encontrado.", 404);
   const atendimento = atendimentoBruto as Atendimento;
+  if (followup && followup.contact_id !== atendimento.contact_id) {
+    return erro("A retomada não é deste contato.", 400);
+  }
+
+  /** Marca a retomada como enviada (texto final, item da fila, quem decidiu). */
+  async function concluirFollowup(outboxId: string | null, quando: string) {
+    if (!followup) return;
+    const { error: erroFollowup } = await db
+      .from("ar1_followups")
+      .update({
+        status: "enviado",
+        final_text: text,
+        outbox_id: outboxId,
+        decided_by: sessao!.user.id,
+        decided_at: quando,
+      })
+      .eq("id", followup.id)
+      .eq("status", "pendente");
+    if (erroFollowup) {
+      console.error("[enviar] a mensagem saiu, mas a retomada não foi atualizada:", erroFollowup.message);
+    }
+  }
 
   const { data: contatoBruto } = await db
     .from("ar1_wa_contacts")
@@ -104,7 +162,14 @@ export async function POST(request: Request) {
         .eq("id", sugestao.id);
     }
 
-    return NextResponse.json({ ok: true, modo: "fila", outbox_id: item.id });
+    await concluirFollowup(item.id, new Date().toISOString());
+
+    return NextResponse.json({
+      ok: true,
+      modo: "fila",
+      outbox_id: item.id,
+      atendimento_id: atendimentoId,
+    });
   }
 
   // ------------------------------------------------------------------- Z-API
@@ -154,5 +219,13 @@ export async function POST(request: Request) {
       .eq("id", sugestao.id);
   }
 
-  return NextResponse.json({ ok: true, modo: "direto", message_id: mensagemId, external_id: externalId });
+  await concluirFollowup(null, agora);
+
+  return NextResponse.json({
+    ok: true,
+    modo: "direto",
+    message_id: mensagemId,
+    external_id: externalId,
+    atendimento_id: atendimentoId,
+  });
 }
