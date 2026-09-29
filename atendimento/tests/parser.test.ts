@@ -208,6 +208,27 @@ describe("parser ponte local (Evolution)", () => {
     expect(m.sentAt.toISOString()).toBe("2026-09-28T12:00:00.000Z");
     expect(m.mediaUrl).toBeNull();
     expect(m.outboxId).toBeNull();
+    expect(m.historico).toBe(false);
+  });
+
+  it("mensagem importada do histórico vem marcada", () => {
+    const m = mensagem({
+      type: "bridge.message",
+      provider: "evolution",
+      message: {
+        external_id: "EV-H1",
+        phone: "5562999998888",
+        from_me: false,
+        sender_name: "Maria Souza",
+        sent_at: "2026-08-01T12:00:00.000Z",
+        kind: "text",
+        body: "Mensagem antiga",
+        is_group: false,
+        outbox_id: null,
+        history: true,
+      },
+    });
+    expect(m.historico).toBe(true);
   });
 
   it("áudio com media_path vira media_url storage:", () => {

@@ -82,7 +82,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/whatsapp/we
     switch (resultado.tipo) {
       case "mensagem": {
         const r = await processarMensagem(resultado.mensagem, payload);
-        if (r.situacao === "gravada" && r.entrada && r.atendimentoId) {
+        // Histórico importado não dispara análise automática (o importador pede uma por conversa no fim).
+        if (r.situacao === "gravada" && r.entrada && r.atendimentoId && !resultado.mensagem.historico) {
           const atendimentoId = r.atendimentoId;
           const sentAtIso = resultado.mensagem.sentAt.toISOString();
           after(() => agendarAnalise(atendimentoId, sentAtIso));

@@ -40,6 +40,8 @@ export interface MensagemNormalizada {
   /** Só na ponte: id da fila de envio quando a mensagem saiu pelo painel. */
   outboxId: string | null;
   origem: "bridge" | "zapi";
+  /** Só na ponte: mensagem antiga importada do histórico (não dispara análise automática). */
+  historico?: boolean;
 }
 
 export type ResultadoWebhook =
@@ -167,6 +169,7 @@ function interpretarPonte(p: Obj, evento: string): ResultadoWebhook {
       photoUrl: null,
       outboxId: limitar(texto(m.outbox_id), 100),
       origem: "bridge",
+      historico: m.history === true,
     },
   };
 }
