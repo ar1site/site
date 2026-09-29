@@ -39,3 +39,10 @@ Webhook do painel: `POST /api/whatsapp/webhook/<WEBHOOK_SECRET>`.
 3. Ler o QR com o celular dos Estúdios SOBI quando a ponte subir.
 4. (Opcional) CNAME `atendimento` na Squarespace.
 5. Fase 2: transcrição de áudio (Whisper/Deepgram), migração para API oficial da Meta, hospedar a ponte fora deste PC.
+
+## Histórico do WhatsApp (28–29/09/2026)
+- Re-pareamento feito com `DATABASE_SAVE_DATA_HISTORIC=true`: a Evolution v2.3.7 recebeu 4.552 mensagens / 1.100 chats. Porém **1.682 mensagens de pessoas vêm com `remoteJid` em formato `@lid`** (identificador novo do WhatsApp) sem `remoteJidAlt`, e no histórico o `pushName` é o próprio LID — não há como traduzir para telefone (só 2 arquivos `lid-mapping-*` na sessão; `/chat/whatsappNumbers` não devolve lid; Contact/Chat não têm mapa). Só 1 de 218 chats recentes resolveu.
+- Mensagens **ao vivo** chegam com `remoteJidAlt` (telefone) e funcionam normalmente (teste real 28/09 23:35: recebida → sugestão → aprovada no painel → enviada pela outbox → entregue).
+- `importar-historico.mjs` está pronto e funciona quando o telefone é resolvível; por ora importa quase nada. Decisão pendente do proprietário: deixar o histórico de lado (recomendado) ou testar Evolution mais nova (2.4+/latest, Baileys com suporte a LID) em nova instância + novo QR.
+- Logout pela API (`DELETE /instance/logout`) não derruba a sessão nesta versão (reconecta); para reparear é preciso desconectar pelo celular (Dispositivos conectados → Desconectar). Script `Reparear-Com-Historico.ps1` cobre o resto (rodar com `-ExecutionPolicy Bypass`).
+- O classificador do Claude Code bloqueia `docker compose up`/logout em serviço em produção mesmo com autorização verbal; o proprietário executa esses passos.
