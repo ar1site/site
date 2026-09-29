@@ -45,6 +45,11 @@ const INTERVALO_FILA_MS = 3_000;
 const INTERVALO_HEARTBEAT_MS = 5 * 60_000;
 const INTERVALO_RECONEXAO_MS = 20_000;
 const INTERVALO_STATUS_REPETIDO_MS = 60_000;
+const INTERVALO_MIN_STATUS_MS = 15_000;
+const INTERVALO_MIN_CONNECT_MS = 120_000;
+const LIMITE_STATUS_POR_MINUTO = 300;
+const INTERVALO_MIN_REINICIO_MS = 15 * 60_000;
+const CONTAINER_EVOLUTION = process.env.EVOLUTION_CONTAINER || "ar1-evolution";
 const TENTATIVAS_MAX_ENVIO = 3;
 const LIMITE_CORPO_BYTES = 80 * 1024 * 1024; // mídia em base64 pode ser grande
 const TIMEOUT_HTTP_MS = 45_000;
@@ -253,8 +258,15 @@ const estado = {
   encerrando: false,
   filaOcupada: false,
   avisoFilaDesconectadaEm: 0,
-  ultimoStatusEnviadoEm: 0, // freio: estado repetido só vai ao painel a cada 60 s
+  ultimoStatusEnviadoEm: 0, // freio dos avisos de estado ao painel
   statusSuprimidos: 0,
+  statusPendente: null,
+  timerStatus: null,
+  verificacaoAgendada: false,
+  ultimoConnectEm: 0,
+  statusNoMinuto: 0,
+  minutosOscilando: 0,
+  ultimoReinicioEm: 0,
   mapaOutbox: new Map(), // key.id (WhatsApp) -> outbox.id
   vistos: new Map(), // chave de duplicidade -> timestamp
   timers: [],
@@ -422,6 +434,11 @@ async function consultarEstado() {
 /** Pede o QR quando não está conectado. */
 async function buscarQrSeDesconectado() {
   if (estado.conectado) return;
+  // "connecting": a Evolution já está tentando. Pedir outra conexão abre sessões em duplicidade,
+  // que se derrubam umas às outras e geram um ciclo open/connecting.
+  if (estado.estadoConexao === "connecting") return;
+  if (Date.now() - estado.ultimoConnectEm < INTERVALO_MIN_CONNECT_MS) return;
+  estado.ultimoConnectEm = Date.now();
   try {
     const r = await evo(`/instance/connect/${encodeURIComponent(cfg.instancia)}`);
     const qr = qrDaResposta(r);
@@ -519,6 +536,55 @@ async function tratarMensagem(resultado) {
   );
 }
 
+/**
+ * Autorreparo. Quando a Evolution acumula conexões duplicadas da mesma sessão ("conflict:
+ * replaced"), ela oscila entre open e connecting centenas de vezes por minuto e só um
+ * reinício do container resolve. Se a oscilação durar 2 minutos seguidos, reinicia sozinha
+ * (no máximo uma vez a cada 15 minutos).
+ */
+function vigiarOscilacao() {
+  const eventos = estado.statusNoMinuto;
+  estado.statusNoMinuto = 0;
+  estado.minutosOscilando = eventos >= LIMITE_STATUS_POR_MINUTO ? estado.minutosOscilando + 1 : 0;
+  if (estado.minutosOscilando < 2) return;
+  if (Date.now() - estado.ultimoReinicioEm < INTERVALO_MIN_REINICIO_MS) return;
+  estado.ultimoReinicioEm = Date.now();
+  estado.minutosOscilando = 0;
+  log.aviso(`conexão oscilando (${eventos} eventos de estado no último minuto); reiniciando o container ${CONTAINER_EVOLUTION}`);
+  try {
+    const p = spawn("docker", ["restart", CONTAINER_EVOLUTION], { stdio: "ignore", windowsHide: true });
+    p.on("error", (e) => log.erro(`não consegui reiniciar a Evolution: ${erroCurto(e)}`));
+    p.on("exit", (codigo) => {
+      if (codigo === 0) {
+        log.info("Evolution reiniciada pelo autorreparo");
+        agendar(() => verificarConexao("após autorreparo"), 60_000);
+      } else log.erro(`docker restart terminou com código ${codigo}`);
+    });
+  } catch (e) {
+    log.erro(`não consegui reiniciar a Evolution: ${erroCurto(e)}`);
+  }
+}
+
+/** Envia ao painel o último estado conhecido (um aviso só, mesmo depois de uma rajada). */
+async function despacharStatus(descricao) {
+  const status = estado.statusPendente;
+  if (!status) return;
+  estado.statusPendente = null;
+  const agrupados = estado.statusSuprimidos;
+  estado.statusSuprimidos = 0;
+  estado.ultimoStatusEnviadoEm = Date.now();
+  log.info(`conexão (${descricao}): ${status.state}${agrupados ? ` [${agrupados} avisos agrupados]` : ""}`);
+  await enviarAoPainel(status);
+  if (status.state === "close" && !estado.verificacaoAgendada) {
+    // Se ficou fechada (ex.: sessão encerrada no celular), confere e pede um QR novo.
+    estado.verificacaoAgendada = true;
+    agendar(async () => {
+      estado.verificacaoAgendada = false;
+      await verificarConexao("após close");
+    }, INTERVALO_RECONEXAO_MS);
+  }
+}
+
 async function processarEvento(envelope) {
   const resultado = normalizarEvento(envelope, { outboxIdPara: (id) => estado.mapaOutbox.get(id) });
   const chave = chaveDeDuplicidade(resultado, envelope);
@@ -529,28 +595,32 @@ async function processarEvento(envelope) {
       await tratarMensagem(resultado);
       break;
     case "status": {
+      estado.statusNoMinuto++;
+      // Em instabilidade a Evolution dispara centenas de eventos de estado por minuto (repetidos
+      // ou alternando open/connecting). Em 29/09/2026 isso gravou 48 mil eventos em 30 min e
+      // derrubou o banco por alguns minutos. Regras: o estado local sempre acompanha; ao painel
+      // vai no máximo um aviso a cada 15 s (o último estado), e estado repetido a cada 60 s.
       const antes = estado.estadoConexao;
-      // Em queda de internet a Evolution repete "connecting" centenas de vezes por minuto.
-      // Estado repetido só vai ao log e ao painel uma vez a cada 60 s (em 29/09/2026 essa
-      // enxurrada gravou 48 mil eventos em 30 min e derrubou o banco por alguns minutos).
-      if (resultado.status.state === antes && Date.now() - estado.ultimoStatusEnviadoEm < INTERVALO_STATUS_REPETIDO_MS) {
+      if (!resultado.status.phone && estado.telefone) resultado.status.phone = estado.telefone;
+      aplicarStatus(resultado.status);
+      estado.statusPendente = resultado.status;
+      const desdeUltimo = Date.now() - estado.ultimoStatusEnviadoEm;
+      const mudou = resultado.status.state !== antes;
+      if (!mudou && desdeUltimo < INTERVALO_STATUS_REPETIDO_MS) {
         estado.statusSuprimidos++;
         break;
       }
-      if (!resultado.status.phone && estado.telefone) resultado.status.phone = estado.telefone;
-      aplicarStatus(resultado.status);
-      const suprimidos = estado.statusSuprimidos;
-      estado.statusSuprimidos = 0;
-      estado.ultimoStatusEnviadoEm = Date.now();
-      log.info(
-        `conexão: ${antes} -> ${resultado.status.state}${resultado.status.status_reason !== undefined ? ` (motivo ${resultado.status.status_reason})` : ""}` +
-          `${suprimidos ? ` [${suprimidos} avisos repetidos ignorados]` : ""}`,
-      );
-      await enviarAoPainel(resultado.status);
-      if (resultado.status.state === "close") {
-        // Se ficou fechada (ex.: sessão encerrada no celular), pede um QR novo.
-        agendar(() => verificarConexao("após close"), INTERVALO_RECONEXAO_MS);
+      if (desdeUltimo < INTERVALO_MIN_STATUS_MS) {
+        estado.statusSuprimidos++;
+        if (!estado.timerStatus) {
+          estado.timerStatus = agendar(async () => {
+            estado.timerStatus = null;
+            await despacharStatus("agrupado");
+          }, INTERVALO_MIN_STATUS_MS - desdeUltimo);
+        }
+        break;
       }
+      await despacharStatus(`${antes} -> ${resultado.status.state}`);
       break;
     }
     case "qr":
@@ -806,6 +876,7 @@ async function principal() {
 
   repetir(processarFila, INTERVALO_FILA_MS);
   repetir(() => verificarConexao("heartbeat"), INTERVALO_HEARTBEAT_MS);
+  repetir(vigiarOscilacao, 60_000);
   await iniciarEvolution();
 }
 
