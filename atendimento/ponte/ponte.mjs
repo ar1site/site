@@ -44,6 +44,7 @@ const LOG_MAX_BYTES = 5 * 1024 * 1024;
 const INTERVALO_FILA_MS = 3_000;
 const INTERVALO_HEARTBEAT_MS = 5 * 60_000;
 const INTERVALO_RECONEXAO_MS = 20_000;
+const INTERVALO_STATUS_REPETIDO_MS = 60_000;
 const TENTATIVAS_MAX_ENVIO = 3;
 const LIMITE_CORPO_BYTES = 80 * 1024 * 1024; // mídia em base64 pode ser grande
 const TIMEOUT_HTTP_MS = 45_000;
@@ -252,6 +253,8 @@ const estado = {
   encerrando: false,
   filaOcupada: false,
   avisoFilaDesconectadaEm: 0,
+  ultimoStatusEnviadoEm: 0, // freio: estado repetido só vai ao painel a cada 60 s
+  statusSuprimidos: 0,
   mapaOutbox: new Map(), // key.id (WhatsApp) -> outbox.id
   vistos: new Map(), // chave de duplicidade -> timestamp
   timers: [],
@@ -527,9 +530,22 @@ async function processarEvento(envelope) {
       break;
     case "status": {
       const antes = estado.estadoConexao;
+      // Em queda de internet a Evolution repete "connecting" centenas de vezes por minuto.
+      // Estado repetido só vai ao log e ao painel uma vez a cada 60 s (em 29/09/2026 essa
+      // enxurrada gravou 48 mil eventos em 30 min e derrubou o banco por alguns minutos).
+      if (resultado.status.state === antes && Date.now() - estado.ultimoStatusEnviadoEm < INTERVALO_STATUS_REPETIDO_MS) {
+        estado.statusSuprimidos++;
+        break;
+      }
       if (!resultado.status.phone && estado.telefone) resultado.status.phone = estado.telefone;
       aplicarStatus(resultado.status);
-      log.info(`conexão: ${antes} -> ${resultado.status.state}${resultado.status.status_reason !== undefined ? ` (motivo ${resultado.status.status_reason})` : ""}`);
+      const suprimidos = estado.statusSuprimidos;
+      estado.statusSuprimidos = 0;
+      estado.ultimoStatusEnviadoEm = Date.now();
+      log.info(
+        `conexão: ${antes} -> ${resultado.status.state}${resultado.status.status_reason !== undefined ? ` (motivo ${resultado.status.status_reason})` : ""}` +
+          `${suprimidos ? ` [${suprimidos} avisos repetidos ignorados]` : ""}`,
+      );
       await enviarAoPainel(resultado.status);
       if (resultado.status.state === "close") {
         // Se ficou fechada (ex.: sessão encerrada no celular), pede um QR novo.
