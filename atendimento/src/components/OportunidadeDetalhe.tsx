@@ -33,6 +33,7 @@ import { validarEdicao, valorParaCampo, type RascunhoOportunidade } from "@/lib/
 import { useRealtime } from "@/lib/realtime";
 import type { EtapaFunil, Oportunidade } from "@/lib/tipos";
 import { Campo, DialogoDeEtapa, type PedidoDeEtapa } from "./DialogosFunil";
+import { Propostas } from "./Propostas";
 import { SeloEtapa, SeloOrigem } from "./Selos";
 import { SugestoesIA } from "./SugestoesIA";
 
@@ -321,6 +322,12 @@ export function OportunidadeDetalhe({ id, emPainel = false }: { id: string; emPa
               </p>
             </details>
           )}
+        </section>
+
+        {/* Propostas */}
+        <section className="cartao space-y-3 p-4">
+          <h2 className="text-sm">Propostas</h2>
+          <Propostas oportunidade={o} atendimentoId={conversa?.id ?? null} aoMudar={carregar} />
         </section>
 
         {/* Comercial */}

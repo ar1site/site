@@ -6,9 +6,13 @@
 // fala com a IA e não envia WhatsApp.
 //
 // Também responde como uma IA de mentira em /anthropic (texto fixo), para
-// testar a rotina das retomadas sem gastar nem sair da máquina:
+// testar as retomadas, o rascunho da proposta e o resumo diário sem gastar
+// nem sair da máquina:
 //   AI_PROVIDER=anthropic  ANTHROPIC_API_KEY=simulado
 //   ANTHROPIC_BASE_URL=http://127.0.0.1:54999/anthropic
+//
+// E guarda arquivos na memória como o Storage (enviar, assinar e baixar), para
+// o PDF da proposta poder ser gerado e baixado.
 //
 // Uso:
 //   node scripts/simular-supabase.mjs [porta]        (padrão: 54999)
@@ -161,7 +165,7 @@ const oportunidades = [
   oportunidade(12, {
     name: "Tiago Nunes", company: "Nunes Contabilidade", project_type: "Gravação de podcast (gravado ou ao vivo)",
     status: "won", source: "whatsapp", estimated_value: 3600, probability: 100, assigned_to: RUI.id,
-    stage_changed_at: ha(20 * DIA), closed_at: ha(20 * DIA),
+    stage_changed_at: ha(20 * HORA), closed_at: ha(20 * HORA),
   }),
   oportunidade(13, {
     name: "Colégio Horizonte", company: "Colégio Horizonte", project_type: "Transmissão ao vivo",
@@ -236,6 +240,7 @@ const atendimentos = [
   atendimento(6, {
     status: "novo", assigned_to: null, ai_service: "Gravação de podcast (gravado ou ao vivo)", unread_count: 1,
     quote_request_id: id("b", 6),
+    created_at: ha(5 * HORA),
     ai_summary: "Bruno perguntou como funciona a gravação de podcast no estúdio.",
     last_message_at: ha(5 * HORA), last_inbound_at: ha(5 * HORA), last_outbound_at: null,
   }),
@@ -322,6 +327,106 @@ const followups = [
   }),
 ];
 
+// Documentos da base de conhecimento (para o rascunho da proposta ter fontes).
+const documento = (n, titulo, texto) => ({
+  id: id("5", n), scope: "global", contact_id: null, title: titulo, kind: "text", content: texto,
+  content_truncated: false, file_path: null, file_name: null, file_mime: null, file_size: null, active: true,
+  created_by: USUARIO.id, created_at: ha(20 * DIA), updated_at: ha(20 * DIA),
+});
+
+const documentos = [
+  documento(
+    1,
+    "Tabela de serviços 2026",
+    "Podcast itinerante em evento: diária de gravação a R$ 2.800,00 (três câmeras, áudio e direção no local).\n" +
+      "Cortes verticais para redes sociais: R$ 150,00 por corte.\n" +
+      "Gravação de podcast em estúdio: R$ 900,00 por episódio.",
+  ),
+  documento(
+    2,
+    "Condições comerciais",
+    "Pagamento: 50% na aprovação e 50% na entrega. Deslocamento em Goiânia incluído; fora da região " +
+      "metropolitana, orçado à parte. Propostas valem por 15 dias.",
+  ),
+];
+
+// Propostas já geradas (histórico da oportunidade 1).
+const FUSO_BRASILIA = -3 * HORA;
+const diaNumero = (ms) => new Date(AGORA - ms + FUSO_BRASILIA).toISOString().slice(0, 10).replace(/-/g, "");
+const diaIso = (ms) => new Date(AGORA + ms + FUSO_BRASILIA).toISOString().slice(0, 10);
+
+const conteudoDaProposta = (investimento) => ({
+  titulo: "Podcast itinerante na feira de noivas",
+  cliente: { nome: "Maria Souza", empresa: "Souza Eventos" },
+  resumo_do_pedido:
+    "A Souza Eventos quer um podcast itinerante durante a feira de noivas, nos dias 24 e 25 de outubro, no Centro " +
+    "de Convenções de Goiânia.",
+  escopo: [
+    { item: "Pré-produção", descricao: "Reunião de alinhamento e roteiro de pautas com a organização." },
+    { item: "Gravação no evento", descricao: "Gravação com três câmeras, áudio e direção no local." },
+    { item: "Pós-produção", descricao: "Edição, correção de cor e cortes verticais para divulgação." },
+  ],
+  entregas: ["Episódios editados em 4K", "3 cortes verticais por episódio"],
+  cronograma: [
+    { etapa: "Gravação na feira", prazo: "24 e 25/10/2026" },
+    { etapa: "Entrega dos episódios", prazo: "a definir" },
+  ],
+  investimento,
+  condicoes: ["Pagamento: 50% na aprovação e 50% na entrega."],
+  validade_dias: 15,
+  observacoes: null,
+});
+
+const proposta = (n, campos) => ({
+  id: id("8", n),
+  quote_request_id: id("b", 1),
+  contact_id: id("c", 1),
+  atendimento_id: id("d", 1),
+  title: "Podcast itinerante na feira de noivas",
+  sources: ["Tabela de serviços 2026", "Conversa do WhatsApp", "Dados da oportunidade"],
+  pending_items: 0,
+  file_size: 401200,
+  pages: 2,
+  model: "simulado",
+  created_by: USUARIO.id,
+  sent_at: null,
+  sent_by: null,
+  outbox_id: null,
+  ...campos,
+});
+
+const propostas = [
+  proposta(1, {
+    number: `AR1-${diaNumero(3 * DIA)}-0002`,
+    content: conteudoDaProposta([
+      { descricao: "Podcast itinerante: diária de gravação (1 dia)", valor: 2800 },
+      { descricao: "Cortes verticais", valor: 2000 },
+    ]),
+    total: 4800,
+    valid_until: diaIso(12 * DIA),
+    file_path: `propostas/${id("b", 1)}/AR1-${diaNumero(3 * DIA)}-0002.pdf`,
+    created_at: ha(3 * DIA),
+    sent_at: ha(3 * DIA - HORA),
+    sent_by: USUARIO.id,
+  }),
+  proposta(2, {
+    number: `AR1-${diaNumero(1 * DIA)}-0001`,
+    content: conteudoDaProposta([
+      { descricao: "Podcast itinerante: diária de gravação (2 dias)", valor: 5600 },
+      { descricao: "Transmissão ao vivo", valor: null },
+    ]),
+    total: 5600,
+    pending_items: 1,
+    valid_until: diaIso(14 * DIA),
+    file_path: `propostas/${id("b", 1)}/AR1-${diaNumero(1 * DIA)}-0001.pdf`,
+    created_by: RUI.id,
+    created_at: ha(1 * DIA),
+  }),
+];
+
+/** Arquivos guardados na memória: "bucket/caminho" -> { bytes, tipo }. */
+const arquivos = new Map();
+
 const tabelas = {
   ar1_staff: [
     { user_id: USUARIO.id, role: "admin", active: true, created_at: ha(60 * DIA) },
@@ -342,7 +447,8 @@ const tabelas = {
     },
   ],
   ar1_wa_outbox: [],
-  ar1_context_docs: [],
+  ar1_context_docs: documentos,
+  ar1_proposals: propostas,
   ar1_settings: [
     { key: "atendimento.instrucoes", value: "Tom direto e cordial. Não prometa preço nem data. Assine como Equipe AR1 Films." },
     {
@@ -355,8 +461,102 @@ const tabelas = {
     },
     { key: "whatsapp.status", value: { connected: true, checked_at: ha(2 * 60 * 1000), state: "open", phone: "556298354354" } },
     { key: "followup.dias_sem_retorno", value: 2 },
+    { key: "resumo.ativo", value: true },
+    { key: "resumo.destinatarios", value: ["556281069562"] },
+    {
+      key: "resumo.ultimo_envio",
+      value: { dia: diaIso(-1 * DIA), enviado_em: ha(1 * DIA), destinatarios: ["556281069562"], origem: "cron" },
+    },
   ],
 };
+
+// ---------------------------------------------------------- IA de mentira
+
+const RESPOSTA_RETOMADA = {
+  texto: "Oi! Passando para retomar a nossa conversa. Posso ajudar em mais alguma coisa? Equipe AR1 Films",
+  motivo: "Resposta fixa do simulador.",
+  prioridade: "media",
+};
+
+// Um valor está na tabela (R$ 2.800), um foi "inventado" (R$ 3.500, que não
+// está escrito em lugar nenhum) e um veio nulo: serve para ver a regra dos
+// valores funcionando na tela.
+const RESPOSTA_PROPOSTA = {
+  titulo: "Podcast itinerante na feira de noivas",
+  cliente: { nome: "Maria Souza", empresa: "Souza Eventos" },
+  resumo_do_pedido:
+    "A Souza Eventos quer um podcast itinerante durante a feira de noivas, nos dias 24 e 25 de outubro, no Centro " +
+    "de Convenções. A cliente pediu o valor com os dois dias de gravação para levar à diretoria.",
+  escopo: [
+    { item: "Pré-produção", descricao: "Reunião de alinhamento e roteiro de pautas com a organização da feira." },
+    { item: "Gravação no evento", descricao: "Dois dias de gravação com três câmeras, áudio e direção no local." },
+    { item: "Pós-produção", descricao: "Edição dos episódios e cortes verticais para divulgação." },
+  ],
+  entregas: ["Episódios editados", "Cortes verticais para redes sociais"],
+  cronograma: [
+    { etapa: "Gravação na feira", prazo: "24 e 25 de outubro" },
+    { etapa: "Entrega dos episódios", prazo: "a definir" },
+  ],
+  investimento: [
+    {
+      descricao: "Podcast itinerante: diária de gravação (valor por dia)",
+      valor: 2800,
+      fonte_do_valor: "Tabela de serviços 2026",
+    },
+    { descricao: "Transmissão ao vivo do evento", valor: 3500, fonte_do_valor: "conversa" },
+    { descricao: "Cortes verticais (quantidade a combinar)", valor: null, fonte_do_valor: null },
+  ],
+  condicoes: [
+    "Pagamento: 50% na aprovação e 50% na entrega.",
+    "Deslocamento em Goiânia incluído; fora da região metropolitana, orçado à parte.",
+  ],
+  validade_dias: 15,
+  observacoes: "A transmissão ao vivo depende da internet disponível no pavilhão.",
+  pendencias: [
+    "Confirmar com a cliente quantos episódios serão gravados por dia.",
+    "Confirmar o horário de montagem no pavilhão.",
+  ],
+  fontes: ["Tabela de serviços 2026", "Condições comerciais"],
+};
+
+function textoDoPedido(pedido) {
+  return (pedido?.messages ?? [])
+    .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)))
+    .join("\n");
+}
+
+/** Resumo escrito com os números que vieram no próprio pedido. */
+function respostaDoResumo(pedido) {
+  let n = {};
+  try {
+    n = JSON.parse(/<numeros>([\s\S]*?)<\/numeros>/.exec(textoDoPedido(pedido))?.[1] ?? "{}");
+  } catch {
+    // pedido fora do formato: segue com zeros
+  }
+  const dia = String(n.dia ?? "").split("-").reverse().slice(0, 2).join("/");
+  const espera = n.quem_espera_ha_mais_tempo?.[0];
+  return {
+    texto: [
+      `*Resumo AR1 · ${dia}*`,
+      `• Conversas novas nas últimas 24 h: ${n.conversas_novas_24h ?? 0}. Clientes aguardando resposta: ${n.clientes_aguardando_resposta ?? 0}.`,
+      `• Retomadas pendentes na tela Retomar: ${n.retomadas_pendentes ?? 0}.`,
+      `• Funil: ${n.funil?.oportunidades_abertas ?? 0} oportunidades abertas, ${n.funil?.total_em_aberto ?? "R$ 0"} em aberto e previsão de ${n.funil?.previsao_ponderada ?? "R$ 0"}.`,
+      `• Próximas ações vencidas: ${n.proximas_acoes?.vencidas ?? 0}. Para hoje: ${n.proximas_acoes?.vencem_hoje ?? 0}.`,
+      `• Últimas 24 h: ganhos ${n.ultimas_24h?.ganhos ?? 0} (${n.ultimas_24h?.valor_ganho ?? "R$ 0"}), perdidos ${n.ultimas_24h?.perdidos ?? 0}.`,
+      espera
+        ? `Comece por responder ${espera.nome}, que espera há ${espera.horas} h.`
+        : "Comece por revisar as próximas ações do funil.",
+    ].join("\n"),
+  };
+}
+
+function respostaDaIA(pedido) {
+  const texto = JSON.stringify(pedido ?? {});
+  if (texto.includes("motivo_da_retomada")) return RESPOSTA_RETOMADA;
+  if (texto.includes("REGRA DOS VALORES")) return RESPOSTA_PROPOSTA;
+  if (texto.includes("<numeros>")) return respostaDoResumo(pedido);
+  return null;
+}
 
 // --------------------------------------------------------------- PostgREST
 
@@ -372,6 +572,11 @@ function comparar(valor, operador, alvo) {
     case "is": return alvo === "null" ? texto === null : texto === alvo;
     case "in":
       return alvo.replace(/^\(|\)$/g, "").split(",").map((v) => v.replace(/^"|"$/g, "")).includes(texto ?? "");
+    case "like":
+    case "ilike": {
+      const padrao = alvo.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/[*%]/g, ".*");
+      return texto !== null && new RegExp(`^${padrao}$`, operador === "ilike" ? "i" : "").test(texto);
+    }
     default: return true;
   }
 }
@@ -390,7 +595,10 @@ function filtrar(linhas, parametros) {
     const ponto = expressao.indexOf(".");
     const operador = expressao.slice(0, ponto);
     const alvo = expressao.slice(ponto + 1);
-    resultado = resultado.filter((l) => comparar(l[chave], operador, alvo) !== negar);
+    // "value->>dia": campo de dentro de um JSON.
+    const [coluna, campo] = chave.split("->>");
+    const ler = (l) => (campo ? l[coluna]?.[campo] : l[coluna]);
+    resultado = resultado.filter((l) => comparar(ler(l), operador, alvo) !== negar);
   }
   const ordem = parametros.get("order");
   if (ordem) {
@@ -439,10 +647,14 @@ function responder(res, status, corpo, cabecalhos = {}) {
   res.end(texto);
 }
 
-async function lerCorpo(req) {
+async function lerBytes(req) {
   const partes = [];
   for await (const p of req) partes.push(p);
-  const texto = Buffer.concat(partes).toString("utf8");
+  return Buffer.concat(partes);
+}
+
+async function lerCorpo(req) {
+  const texto = (await lerBytes(req)).toString("utf8");
   try {
     return texto ? JSON.parse(texto) : null;
   } catch {
@@ -510,16 +722,8 @@ const servidor = createServer(async (req, res) => {
   // IA de mentira (formato da API de mensagens da Anthropic) ---------------
   if (caminho === "/anthropic/v1/messages" && req.method === "POST") {
     const pedido = await lerCorpo(req);
-    const texto = JSON.stringify(pedido ?? {});
-    const retomada = texto.includes("motivo_da_retomada");
-    const resposta = retomada
-      ? {
-          texto: "Oi! Passando para retomar a nossa conversa. Posso ajudar em mais alguma coisa? Equipe AR1 Films",
-          motivo: "Resposta fixa do simulador.",
-          prioridade: "media",
-        }
-      : { erro: "O simulador só responde pedidos de retomada." };
-    return responder(res, retomada ? 200 : 400, retomada
+    const resposta = respostaDaIA(pedido);
+    return responder(res, resposta ? 200 : 400, resposta
       ? {
           id: "msg_simulada",
           type: "message",
@@ -530,7 +734,46 @@ const servidor = createServer(async (req, res) => {
           stop_sequence: null,
           usage: { input_tokens: 1, output_tokens: 1 },
         }
-      : { type: "error", error: { type: "invalid_request_error", message: resposta.erro } });
+      : {
+          type: "error",
+          error: {
+            type: "invalid_request_error",
+            message: "O simulador só responde pedidos de retomada, de proposta e de resumo diário.",
+          },
+        });
+  }
+
+  // Arquivos (Storage) ----------------------------------------------------
+  const assinar = /^\/storage\/v1\/object\/sign\/(.+)$/.exec(caminho);
+  if (assinar) {
+    if (req.method === "POST") {
+      await lerBytes(req);
+      return responder(res, 200, { signedURL: `/object/sign/${assinar[1]}?token=simulado` });
+    }
+    const arquivo = arquivos.get(decodeURIComponent(assinar[1]));
+    if (!arquivo) {
+      return responder(res, 404, {
+        message: "Este arquivo não existe no simulador (só os PDFs gerados nesta sessão).",
+      });
+    }
+    const nome = url.searchParams.get("download");
+    res.writeHead(200, {
+      "Content-Type": arquivo.tipo,
+      "Content-Length": arquivo.bytes.length,
+      ...(nome ? { "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(nome)}` } : {}),
+      ...CORS,
+    });
+    res.end(arquivo.bytes);
+    return;
+  }
+  const objeto = /^\/storage\/v1\/object\/(.+)$/.exec(caminho);
+  if (objeto && (req.method === "POST" || req.method === "PUT")) {
+    const chaveDoArquivo = decodeURIComponent(objeto[1]);
+    arquivos.set(chaveDoArquivo, {
+      bytes: await lerBytes(req),
+      tipo: String(req.headers["content-type"] ?? "application/octet-stream"),
+    });
+    return responder(res, 200, { Key: chaveDoArquivo, Id: id("6", arquivos.size) });
   }
 
   // Tabelas -------------------------------------------------------------
@@ -594,10 +837,17 @@ const servidor = createServer(async (req, res) => {
       return responder(res, 201, umObjeto ? novas[0] : novas);
     }
 
-    if (req.method === "DELETE") return responder(res, 204);
+    if (req.method === "DELETE") {
+      // Como no PostgREST: sem filtro, nada é apagado.
+      const temFiltro = [...url.searchParams.keys()].some((k) => !["select", "order", "limit", "offset"].includes(k));
+      if (temFiltro) {
+        for (const l of filtrar(linhas, url.searchParams)) linhas.splice(linhas.indexOf(l), 1);
+      }
+      return responder(res, 204);
+    }
   }
 
-  // Tempo real, arquivos e o resto: não existem no simulador.
+  // Tempo real e o resto: não existem no simulador.
   return responder(res, 404, { message: "Não existe no simulador." });
 });
 

@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
   },
   // Fotos de perfil do WhatsApp e mídias vêm de domínios variados; usamos <img> direto.
   images: { unoptimized: true },
+  // O PDF da proposta lê as fontes e a logo do disco: garante que esses
+  // arquivos vão junto com a função que gera o PDF.
+  outputFileTracingIncludes: {
+    "/api/propostas": ["./recursos/propostas/fontes/*.ttf", "./public/marca/ar1-films-logo.png"],
+  },
 };
 
 export default nextConfig;

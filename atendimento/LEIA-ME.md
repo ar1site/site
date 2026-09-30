@@ -7,7 +7,9 @@ sugerida) e a equipe aprova, edita ou descarta a resposta antes de enviar.
 
 **A IA nunca envia nada sozinha.** Toda mensagem que sai passa por alguém da
 equipe. No funil vale o mesmo: a IA sugere etapa, valor, probabilidade e
-próxima ação, e nada muda sem o clique de uma pessoa.
+próxima ação, e nada muda sem o clique de uma pessoa. Na proposta também: a IA
+monta o rascunho, a pessoa revisa, gera o PDF e decide se envia. A única
+mensagem automática é o resumo diário, que é interno (vai para o dono).
 
 Projeto Next.js separado do site, dentro da pasta `atendimento/` do repositório.
 Na Vercel, é um projeto próprio com **Root Directory = `atendimento`**.
@@ -20,10 +22,10 @@ Na Vercel, é um projeto próprio com **Root Directory = `atendimento`**.
 | `/` Fila | Atendimentos abertos, com abas por status, busca, selos da IA, não lidas, "Resposta sugerida pronta" e responsável. Atualiza em tempo real. |
 | `/atendimento/[id]` Conversa | Linha do tempo (texto, imagem, áudio, vídeo, documento, figurinha, localização, contato), status, assumir, encerrar, painel da IA, **contexto deste cliente** (textos e documentos do contato), resposta sugerida (enviar / descartar / pedir outra), composer livre e **oportunidade do funil** (criar, resumo e sugestões da IA com Aceitar). No desktop, a fila fica ao lado. |
 | `/funil` Funil | Quadro por etapas (Novo, Qualificado, Em contato, Proposta, Negociação, Ganho, Perdido), total em aberto, previsão ponderada, filtros e "Nova oportunidade". No desktop, arrastar e soltar; no celular, uma etapa por vez e "Mover para…" no cartão. |
-| `/funil/[id]` Oportunidade | Campos comerciais, notas internas, próxima ação, histórico simples, "Abrir conversa", leitura e sugestões da IA. Em tela larga abre como painel ao lado do quadro. |
+| `/funil/[id]` Oportunidade | Campos comerciais, notas internas, próxima ação, histórico simples, "Abrir conversa", leitura e sugestões da IA, **Montar proposta** e histórico de propostas em PDF. Em tela larga abre como painel ao lado do quadro. |
 | `/retomar` Retomar | Conversas paradas com a mensagem de retomada pronta: enviar, adiar (1, 3 ou 7 dias) ou descartar. Botão "Gerar agora". |
 | `/contatos` | Buscar contatos, corrigir nome/empresa, observações (a IA lê) e bloquear spam. |
-| `/configuracoes` | Estado do WhatsApp, QR code, instruções e serviços usados pela IA, **dias sem retorno para sugerir retomada**, **base de conhecimento da AR1**, lista da equipe. |
+| `/configuracoes` | Estado do WhatsApp, QR code, instruções e serviços usados pela IA, **dias sem retorno para sugerir retomada**, **resumo diário** (ligar, telefones, prévia, enviar agora), **base de conhecimento da AR1**, lista da equipe. |
 
 Rotas de servidor:
 
@@ -32,7 +34,7 @@ Rotas de servidor:
 | `POST /api/whatsapp/webhook/[segredo]` | Recebe eventos da ponte local **ou** da Z-API (mesmo webhook; detecta pelo campo `type`). |
 | `POST /api/ia/analisar` | Analisa um atendimento (sessão da equipe ou `x-internal-secret`). |
 | `POST /api/transcrever` | Transcreve o áudio de uma mensagem (`{ "message_id": "…" }`), grava em `transcript` e devolve o texto (sessão da equipe ou `x-internal-secret`). |
-| `POST /api/whatsapp/enviar` | Envia texto: enfileira para a ponte (`bridge`) ou chama a Z-API (`zapi`). Com `followup_id`, marca a retomada como enviada. |
+| `POST /api/whatsapp/enviar` | Envia texto: enfileira para a ponte (`bridge`) ou chama a Z-API (`zapi`). Com `followup_id`, marca a retomada como enviada. Com `proposal_id`, marca a proposta como enviada. |
 | `POST /api/followups/gerar` | Gera as sugestões de retomada (sessão da equipe, `x-internal-secret` ou `Authorization: Bearer CRON_SECRET`). `GET` só para o cron e chamadas internas. |
 | `GET /api/whatsapp/status` | Estado da conexão. |
 | `GET /api/whatsapp/qr` | QR code para conectar o aparelho. |
@@ -43,6 +45,12 @@ Rotas de servidor:
 | `POST /api/contexto` | Cria um documento: texto digitado, ou arquivo já enviado (lê e extrai o texto). |
 | `GET / PATCH / DELETE /api/contexto/[id]` | Texto completo, alteração (título, texto, "usar na IA") e exclusão (linha + arquivo). |
 | `GET /api/contexto/[id]/arquivo` | Redireciona para a URL assinada (10 min) do arquivo original. |
+| `POST /api/propostas/rascunho` | A IA monta o rascunho estruturado da proposta (`{ oportunidade_id, atendimento_id?, sem_ia? }`). Não grava nada. |
+| `GET /api/propostas?oportunidade=…` | Histórico de propostas da oportunidade. |
+| `POST /api/propostas` | Gera o PDF da proposta revisada, guarda no Storage e registra no histórico. |
+| `GET /api/propostas/[id]/arquivo` | Redireciona para a URL assinada (10 min) do PDF. |
+| `POST /api/propostas/[id]/link` | Cria o link assinado de 7 dias e o texto sugerido da mensagem. Não envia. |
+| `GET / POST /api/resumo/diario` | Resumo diário do dono. `GET` só para o cron e chamadas internas; `POST` também aceita sessão da equipe (`{ modo: "previa" \| "enviar", forcar, texto }`). |
 
 ## Variáveis de ambiente
 
@@ -62,7 +70,7 @@ repositório: `.env.local` já está no `.gitignore`.
 | `WHATSAPP_PROVIDER` | `bridge` (padrão, ponte local) ou `zapi`. |
 | `ZAPI_INSTANCE_ID`, `ZAPI_TOKEN`, `ZAPI_CLIENT_TOKEN` | Só quando `WHATSAPP_PROVIDER=zapi`. |
 | `WEBHOOK_SECRET` | Segmento secreto da URL do webhook e cabeçalho `x-internal-secret`. |
-| `CRON_SECRET` | Segredo do cron da Vercel (retomadas diárias). Sem ele o cron recebe 401 e as retomadas só saem pelo botão "Gerar agora". |
+| `CRON_SECRET` | Segredo do cron da Vercel (retomadas às 08:00 e resumo diário às 08:10). Sem ele o cron recebe 401: as retomadas só saem pelo botão "Gerar agora" e o resumo só pelo "Enviar agora". |
 | `APP_URL` | Opcional. URL pública do app (o webhook usa para agendar a análise). Na Vercel usa `VERCEL_PROJECT_PRODUCTION_URL` quando vazio. |
 
 Na Vercel, cadastre as mesmas variáveis em Settings → Environment Variables.
@@ -76,6 +84,7 @@ As tabelas vêm das migrações em `../supabase/migrations/`:
 - `20260928110000_ar1_wa_ponte.sql` — fila de envio (`ar1_wa_outbox`) e bucket privado `ar1-wa-media`.
 - `20260929100000_ar1_contexto.sql` — documentos de contexto (`ar1_context_docs`) e bucket privado `ar1-context`.
 - `20260929110000_ar1_funil.sql` — funil sobre `ar1_quote_requests` (etapas, valor, probabilidade, próxima ação, origem, leitura da IA, gatilho de etapa) e retomadas (`ar1_followups`).
+- `20260930100000_ar1_propostas.sql` — propostas em PDF (`ar1_proposals`): número, conteúdo aprovado, total, validade, caminho do arquivo, quem gerou e quando o link foi enviado. **Precisa ser aplicada** para gerar PDF; sem ela a tela avisa "falta aplicar a migração" e o restante do painel funciona igual. O resumo diário não pede migração.
 
 O app não altera o esquema. Os gatilhos do banco cuidam de contadores, troca de
 status ("de quem é a vez"), agendamento da análise (`ai_analysis_due_at`) e de
@@ -500,9 +509,202 @@ chegou mensagem nova depois que a sugestão foi escrita, o cartão avisa.
 
 ### Cron na Vercel
 
-`vercel.json` já traz o agendamento. Falta cadastrar `CRON_SECRET` em
-Settings → Environment Variables e publicar. A Vercel envia
-`Authorization: Bearer <CRON_SECRET>`; sem a variável, a rota responde 401.
+`vercel.json` já traz os dois agendamentos (retomadas às 11:00 UTC e resumo
+diário às 11:10 UTC). Falta cadastrar `CRON_SECRET` em Settings → Environment
+Variables e publicar. A Vercel envia `Authorization: Bearer <CRON_SECRET>`; sem
+a variável, a rota responde 401. No plano Hobby a Vercel não garante o minuto:
+o cron roda em algum momento dentro da hora marcada.
+
+## Proposta em PDF
+
+Na oportunidade (`/funil/[id]`) e no cartão da oportunidade dentro da conversa
+há o botão **Montar proposta**. São quatro passos, e nada sai para o cliente
+sem o clique de alguém.
+
+### 1. Rascunho da IA
+
+`POST /api/propostas/rascunho` lê a oportunidade, o contato, as últimas 60
+mensagens da conversa (com as transcrições dos áudios), as instruções de
+atendimento, a base de conhecimento e o contexto do cliente, e pede à IA um
+rascunho estruturado (`src/lib/propostas/esquema.ts`):
+
+```json
+{
+  "titulo": "Podcast itinerante na feira de noivas",
+  "cliente": { "nome": "Maria Souza", "empresa": "Souza Eventos" },
+  "resumo_do_pedido": "…",
+  "escopo": [{ "item": "Gravação no evento", "descricao": "…" }],
+  "entregas": ["Episódios editados"],
+  "cronograma": [{ "etapa": "Gravação", "prazo": "24 e 25/10/2026" }],
+  "investimento": [{ "descricao": "Diária de gravação", "valor": 2800, "fonte_do_valor": "Tabela de serviços 2026" }],
+  "condicoes": ["50% na aprovação e 50% na entrega."],
+  "validade_dias": 15,
+  "observacoes": null,
+  "pendencias": ["Confirmar o horário de montagem."],
+  "fontes": ["Tabela de serviços 2026"]
+}
+```
+
+`fonte_do_valor`, `pendencias` e `fontes` são só do rascunho: ajudam quem
+revisa e não fazem parte da proposta.
+
+**Regra dos valores** (no prompt e no código, `src/lib/propostas/valores.ts` e
+`rascunho.ts`, testados): um valor só fica no rascunho se for o valor estimado
+da oportunidade (`estimated_value`) ou se o mesmo número estiver escrito em
+algum texto que a IA leu (documento, contexto do cliente, conversa,
+observações do contato, pedido e notas da oportunidade). Qualquer outro valor
+vira `null`, a tela mostra "a definir" e avisa quantos valores foram
+retirados. Isso inclui conta feita pela IA: se a tabela diz R$ 2.800 por
+diária e a IA devolve R$ 5.600 para dois dias, o valor sai (ninguém escreveu
+5.600) e a pessoa digita. Datas, horas, telefones, percentuais e CPF/CNPJ não
+contam como valor escrito.
+
+O que mais o código garante, seja qual for a resposta do modelo:
+
+- nome e empresa do cliente vêm do cadastro (oportunidade e contato), não da IA;
+- limites de tamanho e de quantidade por campo;
+- validade: a da IA só vale se estiver entre 1 e 180 dias; senão entra a
+  padrão (15 dias), marcada como "padrão";
+- só valem como fonte os documentos que foram de fato enviados à IA;
+- `pendencias` (recados para a equipe) nunca vão para o PDF.
+
+Prazo e condição não têm como ser conferidos por código: a regra fica no
+prompt ("só com base nos documentos ou na conversa") e na revisão de quem edita.
+
+Se a IA falhar, a tela oferece **Montar sem a IA** (rascunho só com os dados
+da oportunidade).
+
+### 2. Editor
+
+Abre em tela cheia, no celular e no desktop. Todos os campos são editáveis, com
+adicionar e remover itens, valores em reais (`4800`, `4.800,50`; vazio =
+"a definir") e total calculado na hora (soma dos itens com valor; os "a
+definir" são contados à parte). Cada seção mostra de onde veio: **IA**, **da
+oportunidade**, **padrão** ou **editado por você**. No alto fica o "Baseado
+em: …" e, em cada valor, "Valor encontrado em: …". O rascunho fica guardado no
+aparelho (`localStorage`) enquanto a pessoa edita; fechar a janela não perde
+nada ("Continuar rascunho").
+
+### 3. PDF
+
+`POST /api/propostas` valida o que veio do editor e gera o PDF no servidor com
+`pdf-lib` (sem navegador, roda na função da Vercel):
+
+- A4 retrato, de 1 a 3 páginas. Passou de 3, a rota recusa com a mensagem
+  "A proposta ficou com N páginas…" e nada é gravado.
+- Fundo claro para impressão, detalhes em cobre `#b86b45` e preto `#111315`,
+  títulos em caixa alta. A logo da AR1 é clara (feita para fundo escuro), então
+  a primeira página tem uma faixa preta no alto com a logo.
+- Número `AR1-AAAAMMDD-XXXX` (dia de Brasília + sequência do dia), data de
+  emissão, "válida até", paginação e rodapé com os contatos em todas as
+  páginas.
+- As tabelas de cronograma e de investimento não se dividem entre páginas.
+- Fontes embutidas: Montserrat (títulos) e Inter (texto), em
+  `recursos/propostas/fontes/` (licença OFL junto). A logo fica em
+  `public/marca/`. `next.config.ts` (`outputFileTracingIncludes`) garante que
+  esses arquivos vão junto com a função.
+- Caractere que a fonte não desenha (emoji) é retirado do texto.
+
+Sobre as fontes: a Inter vai inteira e a Montserrat em subconjunto. O
+subconjunto do `pdf-lib` perde letras da Inter, e a Montserrat ExtraBold
+inteira erra o cifrão. O arquivo fica com cerca de 0,4 MB. Ao trocar de fonte
+ou de versão do `pdf-lib`, confira de novo com uma imagem do PDF (o teste de
+leitura do texto não enxerga letra que sumiu do desenho).
+
+### 4. Histórico, download e envio
+
+O PDF fica no bucket privado `ar1-context`, em
+`propostas/<oportunidade>/<número>.pdf`, e a proposta entra em
+`ar1_proposals`. A oportunidade lista número, data, total, quem gerou e
+validade, com os botões:
+
+- **Baixar**: URL assinada de 10 minutos.
+- **Enviar pelo WhatsApp**: cria um **link assinado de 7 dias** e abre a
+  mensagem pronta para editar. O envio usa `POST /api/whatsapp/enviar` (o mesmo
+  fluxo das outras mensagens) e marca a proposta como enviada. Se o texto
+  ficar sem o link, o botão Enviar trava.
+- **Editar e gerar nova versão**: abre o editor com o conteúdo daquela
+  proposta; o PDF novo recebe outro número e o anterior continua no histórico.
+
+**Limite atual:** a ponte só envia texto, então o cliente recebe o link, não o
+arquivo. Enviar o PDF como documento do WhatsApp é um passo futuro da ponte
+(`ponte/`): ela precisaria aceitar um item da fila com arquivo e chamar o envio
+de mídia da Evolution. Depois de 7 dias o link para de abrir; basta enviar de
+novo para criar outro.
+
+Depois de gerar, aparecem duas sugestões com **Aceitar**, no mesmo formato das
+sugestões da IA (`src/lib/propostas/sugestoes.ts`):
+
+- mover a oportunidade para **Proposta** (só se ela estiver em Novo,
+  Qualificado ou Em contato);
+- próxima ação **"Cobrar retorno da proposta"** em 3 dias (vence às 18 h).
+
+Elas somem quando aceitas, quando a oportunidade fecha ou 7 dias depois da
+proposta.
+
+## Resumo diário
+
+Todo dia às 08:10 de Brasília (`vercel.json`: `10 11 * * *`, logo depois das
+retomadas) a rota `/api/resumo/diario` monta um resumo e manda para o WhatsApp
+do dono. É a única mensagem que sai sem aprovação, e ela é **interna**: vai só
+para os telefones cadastrados, nunca para clientes.
+
+### O que entra
+
+Tudo calculado por funções puras (`src/lib/resumo/numeros.ts`, testadas):
+
+| Bloco | Regra |
+| --- | --- |
+| Conversas novas | Atendimentos criados nas últimas 24 h. As 3 mais urgentes (alta, média, baixa; no empate, a mais antiga) com nome e serviço. |
+| Aguardando resposta | Conversas `novo` ou `em_atendimento` em que a última mensagem é do cliente. Quem espera há mais tempo primeiro. |
+| Retomadas pendentes | `ar1_followups` com status `pendente`. |
+| Funil | Oportunidades por etapa aberta, total em aberto e previsão ponderada (as mesmas contas do quadro). |
+| Próximas ações | Oportunidades abertas com a ação vencida ou que vence hoje (dia de Brasília). |
+| Últimas 24 h | Ganhos e perdidos fechados nas últimas 24 h, com a soma dos valores. |
+
+Ficam de fora: contato bloqueado, conversas classificadas como spam, pessoal ou
+fornecedor e as conversas de quem recebe o resumo.
+
+### O texto
+
+A IA recebe só os números e escreve a mensagem: até 900 caracteres, no máximo
+5 marcadores e uma recomendação do dia que começa com "Comece por". O código
+confere o que volta (`conferirTextoDaIA`): texto vazio, com mais de 1.000
+caracteres, com mais de 5 marcadores, sem a recomendação (ou com duas) ou com
+valor em reais que não está nos números é recusado. Se a IA falhar ou for
+recusada, vai o **texto de reserva**, montado por código com os mesmos números.
+
+### O envio
+
+- Destinatários: `ar1_settings['resumo.destinatarios']`, lista de telefones só
+  com dígitos. Sem a chave, o padrão é `["556281069562"]`. Lista vazia = ninguém
+  recebe.
+- Só envia com `ar1_settings['resumo.ativo']` verdadeiro (padrão: verdadeiro).
+- **Uma vez por dia**: o dia do envio fica em
+  `ar1_settings['resumo.ultimo_envio']`. A reserva do dia é feita antes de
+  enviar, com a condição dentro do próprio `UPDATE`, então duas execuções ao
+  mesmo tempo não enviam em dobro. Se nenhum envio der certo, a reserva é
+  desfeita e a próxima tentativa pode enviar.
+- O envio usa a mesma fila das mensagens da equipe (`ar1_wa_outbox`). Com
+  `WHATSAPP_PROVIDER=zapi`, chama a Z-API direto.
+
+**Conversa interna.** A fila exige `atendimento_id` e `contact_id`. Para cada
+destinatário o painel usa o contato daquele telefone (cria se não existir, com
+o nome "Resumo diário (dono)") e uma conversa própria, criada **já fechada**,
+com `ai_kind = 'pessoal'` e o resumo "Conversa interna do painel…". Assim ela
+não aparece na Fila aberta, não entra no funil e não vira retomada. Quando a
+ponte confirma o envio, o webhook grava a mensagem nessa mesma conversa
+(`src/lib/whatsapp/processar.ts`); sem isso, cada resumo abriria um atendimento
+novo. Se o dono responder ao resumo, a resposta abre uma conversa comum, como
+qualquer mensagem recebida.
+
+### Em Ajustes
+
+A seção **Resumo diário** tem a chave de ligar e desligar, os telefones, o
+último envio, **Ver prévia** (monta o texto sem enviar, e dá para editar) e
+**Enviar agora** (manda o texto da prévia; se o resumo do dia já saiu, pede
+confirmação). Só o botão, com sessão da equipe, passa por cima da trava do dia
+e do "desligado". O cron e as chamadas internas nunca passam.
 
 ## Rodar localmente
 
@@ -562,7 +764,22 @@ npx next build && npx next start -p 3100 -H 127.0.0.1
 
 # 3. Capturas (Chrome ou Edge instalado)
 node scripts/capturar-telas.mjs --saida capturas/minha-rodada
+# só algumas: --so proposta   |   --so resumo
 ```
+
+Para ver o rascunho da proposta e o resumo diário sem gastar com IA, acrescente
+ao `.env.local` da cópia a IA de mentira do simulador:
+
+```
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=simulado
+ANTHROPIC_BASE_URL=http://127.0.0.1:54999/anthropic
+CRON_SECRET=simulado-cron
+```
+
+O simulador também guarda arquivos na memória, então "Gerar PDF" funciona de
+ponta a ponta e o PDF pode ser baixado. Para guardar um PDF de exemplo gerado
+pelos testes: `PDF_EXEMPLO_SAIDA=<pasta> npm test`.
 
 Use uma cópia com a própria `node_modules` (o Turbopack não aceita
 `node_modules` por atalho) e nunca o `.env.local` de verdade. A pasta
@@ -577,7 +794,7 @@ src/
     login/                    tela de login
     (app)/                    telas protegidas: fila, conversa, funil, retomar, contatos, configurações
     api/                      rotas de servidor
-  components/                 Fila, Conversa, Funil, OportunidadeDetalhe, Retomar, SugestoesIA, Shell…
+  components/                 Fila, Conversa, Funil, OportunidadeDetalhe, Propostas, EditorProposta, ResumoDiario, Retomar…
   lib/
     ia.ts                     camada de IA (OpenRouter | Anthropic)
     transcricao.ts            transcrição de áudio pela OpenRouter (só servidor, testado)
@@ -591,6 +808,21 @@ src/
     followups/candidatos.ts   quem recebe retomada, horas úteis (puro, testado)
     followups/prompt.ts       prompt e resposta da retomada (puro, testado)
     followups/gerar.ts        rotina das retomadas (banco + IA)
+    propostas/proposta.ts     conteúdo, limites, total, numeração, validade e validação (puro, testado)
+    propostas/valores.ts      regra dos valores: o número precisa estar escrito (puro, testado)
+    propostas/rascunho.ts     prompt do rascunho e regras aplicadas à resposta da IA (puro, testado)
+    propostas/editor.ts       estado do editor e conversão para a proposta (puro, testado)
+    propostas/sugestoes.ts    sugestões depois de gerar a proposta (puro, testado)
+    propostas/mensagem.ts     mensagem do WhatsApp com o link (puro, testado)
+    propostas/pdf.ts          PDF com a marca AR1 Films (pdf-lib; só servidor, testado)
+    propostas/servidor.ts     rascunho com a IA e geração da proposta (banco + Storage)
+    propostas/registro.ts     histórico, link assinado e marca de enviada (banco + Storage)
+    resumo/numeros.ts         números do resumo diário (puro, testado)
+    resumo/texto.ts           texto de reserva, prompt e conferência do texto da IA (puro, testado)
+    resumo/ajustes.ts         telefones, ligar e desligar, trava de um envio por dia (puro, testado)
+    resumo/rotina.ts          ordem das coisas no resumo, com portas trocáveis (puro, testado)
+    resumo/executar.ts        portas de verdade: banco, IA e fila de envio
+    resumo/conversa-interna.ts  a conversa fechada usada para mandar o resumo (puro, testado)
     contexto/extrair.ts       texto de PDF, Word e texto puro (só servidor, testado)
     contexto/orcamento.ts     orçamento de caracteres e cortes (puro, testado)
     contexto/validar.ts       validação das entradas das rotas (puro, testado)
@@ -600,8 +832,10 @@ src/
     whatsapp/pos-mensagem.ts  depois de gravar: transcrever e então analisar (puro, testado)
     whatsapp/zapi.ts          cliente da Z-API
     supabase/                 clientes (navegador, servidor, serviço)
+recursos/propostas/fontes/    Montserrat e Inter (TTF, licença OFL) usadas no PDF
+public/marca/                 logo da AR1 Films usada no PDF
 tests/                        vitest
 scripts/simular-webhook.mjs   simulador do webhook
-scripts/simular-supabase.mjs  Supabase de mentira para ver as telas
+scripts/simular-supabase.mjs  Supabase, Storage e IA de mentira para ver as telas
 scripts/capturar-telas.mjs    capturas com dados simulados
 ```

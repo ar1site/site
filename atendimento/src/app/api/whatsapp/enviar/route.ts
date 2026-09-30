@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { respostaNaoAutorizado, sessaoDaEquipe } from "@/lib/auth";
 import { env } from "@/lib/env";
+import { ErroProposta, lerProposta, marcarComoEnviada } from "@/lib/propostas/registro";
 import { supabaseServico } from "@/lib/supabase/service";
-import type { Atendimento, Contato, Followup, Sugestao } from "@/lib/tipos";
+import type { Atendimento, Contato, Followup, PropostaRegistro, Sugestao } from "@/lib/tipos";
 import { enviarTexto, ErroZapi } from "@/lib/whatsapp/zapi";
 
 export const runtime = "nodejs";
@@ -26,6 +27,9 @@ function erro(mensagem: string, status = 400) {
  * pessoa: o follow-up passa a "enviado" com o texto final e o item da fila.
  * Nesse caso `atendimento_id` é opcional: vale a conversa aberta do contato
  * e, se não houver, a conversa em que a retomada foi sugerida.
+ *
+ * Com `proposal_id`, a mensagem leva o link da proposta (o texto já foi
+ * revisado por uma pessoa): depois do envio a proposta fica marcada como enviada.
  */
 export async function POST(request: Request) {
   const sessao = await sessaoDaEquipe();
@@ -36,6 +40,7 @@ export async function POST(request: Request) {
     text?: unknown;
     suggestion_id?: unknown;
     followup_id?: unknown;
+    proposal_id?: unknown;
   } = {};
   try {
     body = await request.json();
@@ -46,6 +51,7 @@ export async function POST(request: Request) {
   const text = typeof body.text === "string" ? body.text.trim() : "";
   const suggestionId = typeof body.suggestion_id === "string" ? body.suggestion_id : null;
   const followupId = typeof body.followup_id === "string" ? body.followup_id : null;
+  const proposalId = typeof body.proposal_id === "string" ? body.proposal_id : null;
 
   if (followupId && !UUID.test(followupId)) return erro("Retomada inválida.");
   if (!followupId && !UUID.test(atendimentoId)) return erro("Atendimento inválido.");
@@ -53,6 +59,7 @@ export async function POST(request: Request) {
   if (!text) return erro("Escreva a mensagem antes de enviar.");
   if (text.length > 5000) return erro("A mensagem é longa demais (máximo 5000 caracteres).");
   if (suggestionId && !UUID.test(suggestionId)) return erro("Sugestão inválida.");
+  if (proposalId && !UUID.test(proposalId)) return erro("Proposta inválida.");
 
   const db = supabaseServico();
 
@@ -117,6 +124,25 @@ export async function POST(request: Request) {
   const contato = contatoBruto as Contato;
   if (contato.blocked) return erro("Este contato está bloqueado. Desbloqueie em Contatos para enviar.");
 
+  let proposta: PropostaRegistro | null = null;
+  if (proposalId) {
+    try {
+      proposta = await lerProposta(proposalId);
+    } catch (e) {
+      if (e instanceof ErroProposta) return erro(e.message, e.status);
+      throw e;
+    }
+    if (proposta.contact_id && proposta.contact_id !== contato.id) {
+      return erro("A proposta não é deste contato.", 400);
+    }
+  }
+
+  /** Marca a proposta como enviada (quem enviou, quando e o item da fila). */
+  async function concluirProposta(outboxId: string | null, quando: string) {
+    if (!proposta) return;
+    await marcarComoEnviada({ propostaId: proposta.id, usuarioId: sessao!.user.id, outboxId, quando });
+  }
+
   let sugestao: Sugestao | null = null;
   if (suggestionId) {
     const { data } = await db
@@ -163,6 +189,7 @@ export async function POST(request: Request) {
     }
 
     await concluirFollowup(item.id, new Date().toISOString());
+    await concluirProposta(item.id, new Date().toISOString());
 
     return NextResponse.json({
       ok: true,
@@ -220,6 +247,7 @@ export async function POST(request: Request) {
   }
 
   await concluirFollowup(null, agora);
+  await concluirProposta(null, agora);
 
   return NextResponse.json({
     ok: true,

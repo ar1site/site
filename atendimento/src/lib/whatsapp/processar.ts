@@ -2,6 +2,7 @@ import "server-only";
 
 // Lado "banco" do webhook: contato -> atendimento -> mensagem, com dedupe.
 
+import { ehConversaInterna } from "../resumo/conversa-interna";
 import { supabaseServico } from "../supabase/service";
 import type { Atendimento, Contato, Outbox } from "../tipos";
 import type { MensagemNormalizada } from "./parser";
@@ -93,6 +94,22 @@ async function lerOutbox(outboxId: string | null): Promise<Outbox | null> {
 }
 
 /**
+ * Mensagem que saiu pela fila a partir de uma conversa interna (o resumo
+ * diário do dono): fica nessa mesma conversa, que é fechada. Sem isto, o eco
+ * do envio abriria um atendimento novo na Fila a cada resumo.
+ */
+async function lerConversaInterna(outbox: Outbox | null, contatoId: string): Promise<Atendimento | null> {
+  if (!outbox || outbox.contact_id !== contatoId) return null;
+  const { data } = await supabaseServico()
+    .from("ar1_atendimentos")
+    .select("*")
+    .eq("id", outbox.atendimento_id)
+    .maybeSingle();
+  const atendimento = (data as Atendimento | null) ?? null;
+  return atendimento && atendimento.contact_id === contatoId && ehConversaInterna(atendimento) ? atendimento : null;
+}
+
+/**
  * Grava uma mensagem normalizada (recebida ou enviada) no banco.
  * Dedupe por external_id (ON CONFLICT DO NOTHING).
  */
@@ -113,8 +130,9 @@ export async function processarMensagem(
     };
   }
 
-  const atendimento = await garantirAtendimentoAberto(contato.id);
   const outbox = m.fromMe ? await lerOutbox(m.outboxId) : null;
+  const atendimento =
+    (await lerConversaInterna(outbox, contato.id)) ?? (await garantirAtendimentoAberto(contato.id));
 
   const { data: inserida, error } = await db
     .from("ar1_wa_messages")

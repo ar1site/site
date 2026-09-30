@@ -16,6 +16,7 @@ import { camposIniciaisDaIA } from "@/lib/funil/sugestoes";
 import { supabaseNoNavegador } from "@/lib/supabase/browser";
 import type { Atendimento, Contato, DadosExtraidos, Oportunidade } from "@/lib/tipos";
 import { FormularioOportunidade, type ValoresIniciais } from "./DialogosFunil";
+import { Propostas } from "./Propostas";
 import { SeloEtapa } from "./Selos";
 import { SugestoesIA } from "./SugestoesIA";
 
@@ -25,6 +26,7 @@ export function OportunidadeNaConversa({
   oportunidade,
   outrasDoContato,
   usuarioId,
+  propostasAtivas = true,
   aoMudar,
 }: {
   atendimento: Atendimento;
@@ -34,6 +36,11 @@ export function OportunidadeNaConversa({
   /** Oportunidades abertas do mesmo contato que ainda não estão ligadas a esta conversa. */
   outrasDoContato: Oportunidade[];
   usuarioId: string;
+  /**
+   * A conversa desenha este cartão duas vezes (celular e painel do desktop).
+   * Só o que está visível carrega as propostas, para não buscar em dobro.
+   */
+  propostasAtivas?: boolean;
   aoMudar: () => void | Promise<void>;
 }) {
   const [criando, setCriando] = useState(false);
@@ -103,6 +110,11 @@ export function OportunidadeNaConversa({
         <Link href={`/funil/${oportunidade.id}`} className="botao botao-secundario w-full py-1.5 text-xs">
           Abrir no funil
         </Link>
+        {propostasAtivas && (
+          <div className="border-t border-borda pt-3">
+            <Propostas oportunidade={oportunidade} atendimentoId={atendimento.id} aoMudar={aoMudar} compacto />
+          </div>
+        )}
       </div>
     );
   }

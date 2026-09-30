@@ -1,5 +1,7 @@
 // Tipos das tabelas do Supabase usadas pelo app (espelham as migrações).
 
+import type { Proposta } from "./propostas/proposta";
+
 export type StatusAtendimento =
   | "novo"
   | "em_atendimento"
@@ -285,4 +287,38 @@ export interface Followup {
   model: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ------------------------------------------------------------------ propostas
+
+/** Linha de public.ar1_proposals: cada PDF de proposta gerado para uma oportunidade. */
+export interface PropostaRegistro {
+  id: string;
+  quote_request_id: string;
+  contact_id: string | null;
+  atendimento_id: string | null;
+  /** AR1-AAAAMMDD-XXXX */
+  number: string;
+  title: string;
+  /** O conteúdo aprovado, como saiu no PDF. */
+  content: Proposta;
+  /** "Baseado em: …" */
+  sources: string[];
+  /** Soma dos itens com valor; null quando nenhum item tem valor. */
+  total: number | null;
+  /** Itens "a definir". */
+  pending_items: number;
+  /** AAAA-MM-DD */
+  valid_until: string;
+  /** Caminho no bucket ar1-context. */
+  file_path: string;
+  file_size: number | null;
+  pages: number | null;
+  /** Modelo que montou o rascunho; null quando a proposta foi escrita sem IA. */
+  model: string | null;
+  created_by: string | null;
+  created_at: string;
+  sent_at: string | null;
+  sent_by: string | null;
+  outbox_id: string | null;
 }

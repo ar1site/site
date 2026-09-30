@@ -318,7 +318,8 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
   const fechado = atendimento.status === "fechado";
   const fontes = separarFontes(sugestao?.rationale).fontes;
 
-  const painelAnalise = (
+  // Desenhado duas vezes (celular e desktop); as propostas carregam só no que está visível.
+  const painelAnalise = (visivel: boolean) => (
     <PainelAnalise
       atendimento={atendimento}
       fontes={fontes}
@@ -331,6 +332,7 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
         oportunidade={oportunidade}
         outrasDoContato={oportunidadesDoContato}
         usuarioId={usuario.id}
+        propostasAtivas={visivel}
         aoMudar={carregar}
       />
     </PainelAnalise>
@@ -389,7 +391,7 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
                   </span>
                 )}
               </summary>
-              <div className="border-t border-borda p-3">{painelAnalise}</div>
+              <div className="border-t border-borda p-3">{painelAnalise(!telaLarga)}</div>
             </details>
 
             {/* Contexto do cliente (celular): recolhível logo abaixo da análise */}
@@ -429,7 +431,7 @@ export function Conversa({ atendimentoId }: { atendimentoId: string }) {
         {/* Painel da IA (desktop largo) */}
         <aside className="hidden w-80 shrink-0 overflow-y-auto border-l border-borda bg-superficie-2 p-4 xl:block">
           <h2 className="mb-3 text-sm">Análise da IA</h2>
-          {painelAnalise}
+          {painelAnalise(telaLarga)}
           {telaLarga && <div className="cartao mt-5 p-3">{contextoDoCliente(false)}</div>}
         </aside>
       </div>

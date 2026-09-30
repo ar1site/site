@@ -130,13 +130,38 @@ const clicar = (texto) => `(() => {
   return "ok";
 })()`;
 const rolar = (seletor) => `(() => {
-  const e = [...document.querySelectorAll("h2, p")].find(
+  const e = [...document.querySelectorAll("h2, h3, p")].find(
     (h) => h.offsetParent !== null && h.textContent.trim() === ${JSON.stringify(seletor)},
   );
   if (!e) return "não encontrado";
   e.scrollIntoView({ block: "start" });
   window.scrollBy(0, -12);
   return "ok";
+})()`;
+/** Espera um texto aparecer na tela (resposta do servidor, da IA simulada…). */
+const esperarTexto = (texto, limiteMs = 20000) => `(async () => {
+  // Sem diferenciar maiúsculas (títulos saem em caixa alta) e olhando também os campos de texto.
+  const alvo = ${JSON.stringify(texto)}.toLowerCase();
+  const naTela = () =>
+    [document.body.innerText, ...[...document.querySelectorAll("textarea, input")].map((c) => c.value)]
+      .join("\\n")
+      .toLowerCase();
+  const fim = Date.now() + ${limiteMs};
+  while (Date.now() < fim) {
+    if (naTela().includes(alvo)) return "ok";
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return "não apareceu: " + ${JSON.stringify(texto)};
+})()`;
+/** Retângulo (na página inteira) da seção que tem este título, para recortar a captura. */
+const retanguloDaSecao = (titulo) => `(() => {
+  const h = [...document.querySelectorAll("h2")].find(
+    (e) => e.offsetParent !== null && e.textContent.trim() === ${JSON.stringify(titulo)},
+  );
+  const s = h?.closest("section");
+  if (!s) return null;
+  const r = s.getBoundingClientRect();
+  return JSON.stringify({ x: r.left + scrollX, y: r.top + scrollY, width: r.width, height: r.height });
 })()`;
 
 const OPORTUNIDADE = "b0000000-0000-4000-8000-000000000001";
@@ -170,10 +195,92 @@ const capturas = [
   { arquivo: "14-conversa-celular-oportunidade", rota: `/atendimento/${CONVERSA}`, modo: CELULAR, acoes: [clicar("Análise da IA"), rolar("Oportunidade")] },
   { arquivo: "15-conversa-desktop-oportunidade", rota: `/atendimento/${CONVERSA}`, modo: { ...DESKTOP, w: 1600 } },
   { arquivo: "16-ajustes-celular-retomadas", rota: "/configuracoes", modo: CELULAR, acoes: [rolar("Retomadas")] },
+
+  // Propostas em PDF -----------------------------------------------------------
+  {
+    arquivo: "17-propostas-historico-celular",
+    rota: `/funil/${OPORTUNIDADE}`,
+    modo: CELULAR,
+    acoes: [esperarTexto("Histórico de propostas (2)"), rolar("Propostas")],
+  },
+  {
+    arquivo: "18-propostas-historico-desktop",
+    rota: `/funil/${OPORTUNIDADE}`,
+    modo: DESKTOP,
+    acoes: [esperarTexto("Histórico de propostas (2)"), rolar("Propostas")],
+  },
+  {
+    arquivo: "19-proposta-editor-desktop",
+    rota: `/funil/${OPORTUNIDADE}`,
+    modo: DESKTOP,
+    acoes: [clicar("Montar proposta"), esperarTexto("Rascunho da IA")],
+  },
+  {
+    arquivo: "20-proposta-editor-desktop-investimento",
+    rota: `/funil/${OPORTUNIDADE}`,
+    modo: DESKTOP,
+    acoes: [clicar("Montar proposta"), esperarTexto("Rascunho da IA"), rolar("Cronograma")],
+  },
+  {
+    arquivo: "21-proposta-editor-celular",
+    rota: `/funil/${OPORTUNIDADE}`,
+    modo: CELULAR,
+    acoes: [clicar("Montar proposta"), esperarTexto("Rascunho da IA")],
+  },
+  {
+    arquivo: "22-proposta-editor-celular-investimento",
+    rota: `/funil/${OPORTUNIDADE}`,
+    modo: CELULAR,
+    acoes: [clicar("Montar proposta"), esperarTexto("Rascunho da IA"), rolar("Investimento")],
+  },
+  {
+    // Gera o PDF de verdade (pela rota do painel), guardado no Storage simulado.
+    arquivo: "23-proposta-gerada-celular",
+    rota: `/funil/${OPORTUNIDADE}`,
+    modo: CELULAR,
+    acoes: [
+      clicar("Montar proposta"),
+      esperarTexto("Rascunho da IA"),
+      clicar("Gerar PDF"),
+      esperarTexto("Histórico de propostas (3)"),
+      rolar("Propostas"),
+    ],
+  },
+  {
+    arquivo: "24-proposta-enviar-whatsapp-celular",
+    rota: `/funil/${OPORTUNIDADE}`,
+    modo: CELULAR,
+    acoes: [esperarTexto("Histórico de propostas (3)"), clicar("Enviar pelo WhatsApp"), esperarTexto("Segue a proposta")],
+  },
+  {
+    arquivo: "25-conversa-desktop-propostas",
+    rota: `/atendimento/${CONVERSA}`,
+    modo: { ...DESKTOP, w: 1600 },
+    acoes: [esperarTexto("Histórico de propostas (3)"), rolar("Oportunidade")],
+  },
+
+  // Resumo diário ----------------------------------------------------------------
+  {
+    arquivo: "26-ajustes-resumo-diario-celular",
+    rota: "/configuracoes",
+    modo: CELULAR,
+    acoes: [rolar("Resumo diário"), clicar("Ver prévia"), esperarTexto("Prévia do texto"), rolar("Resumo diário")],
+    secao: "Resumo diário",
+  },
+  {
+    arquivo: "27-ajustes-resumo-diario-desktop",
+    rota: "/configuracoes",
+    modo: DESKTOP,
+    acoes: [rolar("Resumo diário"), clicar("Ver prévia"), esperarTexto("Prévia do texto"), rolar("Resumo diário")],
+    secao: "Resumo diário",
+  },
 ];
 
+// --so <texto>: tira só as capturas cujo nome contém o texto (ex.: --so proposta).
+const SO = opcao("so", "");
+
 const relatorio = [];
-for (const c of capturas) {
+for (const c of capturas.filter((x) => !SO || x.arquivo.includes(SO))) {
   await cdp("Emulation.setDeviceMetricsOverride", {
     width: c.modo.w,
     height: c.modo.h,
@@ -195,7 +302,7 @@ for (const c of capturas) {
   }
   const acoes = [];
   for (const acao of c.acoes ?? []) {
-    const { result } = await cdp("Runtime.evaluate", { expression: acao, returnByValue: true });
+    const { result } = await cdp("Runtime.evaluate", { expression: acao, returnByValue: true, awaitPromise: true });
     acoes.push(result.value);
     await espera(700);
   }
@@ -215,6 +322,26 @@ for (const c of capturas) {
   if (c.paginaInteira) {
     parametros.captureBeyondViewport = true;
     parametros.clip = { x: 0, y: 0, width: c.modo.w, height: Math.min(info.alturaDoc, 6000), scale: 1 };
+  }
+  if (c.secao) {
+    // A seção inteira, mesmo que seja mais alta que a tela: a janela cresce até
+    // ela caber (assim a barra fixa de baixo não fica no meio da imagem).
+    const medir = async () => {
+      const { result: r } = await cdp("Runtime.evaluate", { expression: retanguloDaSecao(c.secao), returnByValue: true });
+      return r.value ? JSON.parse(r.value) : null;
+    };
+    const antes = await medir();
+    if (antes) {
+      await cdp("Emulation.setDeviceMetricsOverride", {
+        width: c.modo.w,
+        height: Math.min(Math.ceil(antes.height) + 160, 5000),
+        deviceScaleFactor: c.modo.celular ? 2 : 1,
+        mobile: c.modo.celular,
+      });
+      await espera(400);
+      await cdp("Runtime.evaluate", { expression: rolar(c.secao), returnByValue: true });
+      await espera(400);
+    }
   }
   const { data } = await cdp("Page.captureScreenshot", parametros);
   writeFileSync(path.join(SAIDA, `${c.arquivo}.png`), Buffer.from(data, "base64"));
