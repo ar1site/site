@@ -1,5 +1,7 @@
 // Tipos das tabelas do Supabase usadas pelo app (espelham as migrações).
 
+import type { PropostaPremium } from "./propostas/premium/conteudo";
+import type { StatusProposta } from "./propostas/premium/publico";
 import type { Proposta } from "./propostas/proposta";
 
 export type StatusAtendimento =
@@ -291,7 +293,11 @@ export interface Followup {
 
 // ------------------------------------------------------------------ propostas
 
-/** Linha de public.ar1_proposals: cada PDF de proposta gerado para uma oportunidade. */
+/**
+ * Linha de public.ar1_proposals. `kind = 'pdf'` é a proposta em PDF antiga
+ * (content = Proposta); `kind = 'premium'` é a apresentação (content =
+ * PropostaPremium, página pública, PDF opcional pelo Chrome).
+ */
 export interface PropostaRegistro {
   id: string;
   quote_request_id: string;
@@ -300,18 +306,18 @@ export interface PropostaRegistro {
   /** AR1-AAAAMMDD-XXXX */
   number: string;
   title: string;
-  /** O conteúdo aprovado, como saiu no PDF. */
-  content: Proposta;
+  /** O conteúdo aprovado (forma conforme `kind`). */
+  content: Proposta | PropostaPremium;
   /** "Baseado em: …" */
   sources: string[];
   /** Soma dos itens com valor; null quando nenhum item tem valor. */
   total: number | null;
-  /** Itens "a definir". */
+  /** Itens "a definir" / "sob consulta". */
   pending_items: number;
   /** AAAA-MM-DD */
   valid_until: string;
-  /** Caminho no bucket ar1-context. */
-  file_path: string;
+  /** Caminho do PDF no bucket ar1-context (null enquanto não há PDF). */
+  file_path: string | null;
   file_size: number | null;
   pages: number | null;
   /** Modelo que montou o rascunho; null quando a proposta foi escrita sem IA. */
@@ -321,4 +327,35 @@ export interface PropostaRegistro {
   sent_at: string | null;
   sent_by: string | null;
   outbox_id: string | null;
+  // Colunas da migração 20260930110000 (propostas premium). Ausentes antes dela.
+  kind: "pdf" | "premium";
+  status: StatusProposta;
+  service: string | null;
+  public_token: string | null;
+  public_days: number;
+  public_expires_at: string | null;
+  views: number;
+  first_viewed_at: string | null;
+  last_viewed_at: string | null;
+  accepted_at: string | null;
+  accepted_name: string | null;
+  decided_at: string | null;
+  decided_by: string | null;
+  unconfirmed_prices: boolean;
+  pdf_engine: "chrome" | "pdf-lib" | null;
+  pdf_error: string | null;
+  updated_at: string;
+  /**
+   * Recados da IA e avisos do sistema para a equipe (nunca para o cliente).
+   * Coluna internal_notes (jsonb), de uma migração posterior; null sem ela.
+   */
+  internal_notes: NotasInternas | null;
+}
+
+/** ar1_proposals.internal_notes: o que a equipe precisa conferir antes de enviar. */
+export interface NotasInternas {
+  pendencias: string[];
+  avisos: string[];
+  /** ISO */
+  atualizado_em: string | null;
 }

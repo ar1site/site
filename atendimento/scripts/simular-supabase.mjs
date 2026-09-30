@@ -25,6 +25,7 @@
 // e use scripts/capturar-telas.mjs para tirar as capturas.
 
 import { createServer } from "node:http";
+import { PRECOS_INICIAIS } from "./precos-iniciais.mjs";
 
 const PORTA = Number(process.argv[2] || process.env.PORTA_SIMULADOR || 54999);
 const AGORA = Date.now();
@@ -424,6 +425,172 @@ const propostas = [
   }),
 ];
 
+// Colunas da migração premium nas propostas em PDF antigas.
+for (const p of propostas) {
+  Object.assign(p, {
+    kind: "pdf", status: p.sent_at ? "enviada" : "gerada", service: "Podcast itinerante", public_token: null,
+    public_days: 30, public_expires_at: null, views: 0, first_viewed_at: null, last_viewed_at: null,
+    accepted_at: null, accepted_name: null, decided_at: null, decided_by: null, unconfirmed_prices: false,
+    pdf_engine: "pdf-lib", pdf_error: null, updated_at: p.created_at,
+  });
+}
+
+// Tabela de preços: a mesma da migração (valores sugeridos). Alguns itens já
+// confirmados pela equipe, para a tela mostrar os dois selos.
+const idDoPreco = (n) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const CONFIRMADOS = new Set([1, 3, 6, 7, 8, 12].map(idDoPreco));
+const itensDePreco = PRECOS_INICIAIS.map((i) => ({
+  ...i,
+  confirmed: CONFIRMADOS.has(i.id),
+  updated_by: CONFIRMADOS.has(i.id) ? USUARIO.id : null,
+  created_at: ha(20 * DIA),
+  updated_at: CONFIRMADOS.has(i.id) ? ha(2 * DIA) : ha(20 * DIA),
+}));
+const precoDe = (n) => itensDePreco.find((i) => i.id === idDoPreco(n));
+
+/** Investimento como o servidor grava: valores da tabela, desconto limitado ao subtotal. */
+function investimentoSimulado(linhas, desconto = null, condicoes = "") {
+  const itens = linhas.map(([n, quantidade, descricao]) => {
+    const item = n ? precoDe(n) : null;
+    return item
+      ? {
+          descricao: descricao ?? item.name, quantidade, unidade: item.unit, valor_unitario: item.price,
+          valor_total: Math.round(item.price * quantidade * 100) / 100, price_item_id: item.id, nao_confirmado: !item.confirmed,
+        }
+      : { descricao, quantidade, unidade: "por projeto", valor_unitario: null, valor_total: null, price_item_id: null, nao_confirmado: false };
+  });
+  const subtotal = itens.reduce((soma, i) => soma + (i.valor_total ?? 0), 0);
+  const d = desconto ? Math.min(desconto, subtotal) : null;
+  return {
+    itens, subtotal, desconto: d, total: subtotal - (d ?? 0), condicoes_pagamento: condicoes,
+    sob_consulta: itens.filter((i) => i.price_item_id === null).length,
+  };
+}
+
+const ORDEM = ["capa", "entendimento", "por_que_ar1", "solucao", "escopo", "entregas", "cronograma", "investimento", "proximos_passos", "observacoes"];
+
+function conteudoPremium(campos) {
+  return {
+    versao: 2, subtitulo: "", logo_cliente: null, observacoes: null, validade_dias: 30, ordem_secoes: ORDEM,
+    por_que_ar1: [
+      "Experiência de estrada: mais de 4 mil episódios gravados e transmitidos com equipe própria.",
+      "Estrutura completa: estúdio em Goiânia, estúdio itinerante e o Haras SOBI com mais de 20 cenários.",
+      "Conteúdo que continua trabalhando: cortes, melhores momentos e acervo pensados desde a pauta.",
+    ],
+    ...campos,
+  };
+}
+
+/** Token fixo de 43 caracteres (como o do servidor), para abrir /p/<token> no simulador. */
+const tokenSimulado = (letra) => letra.repeat(8) + "Simulado_" + "x".repeat(26);
+
+const numeroDoDia = (ms, seq) => "AR1-" + diaNumero(ms) + "-" + String(seq).padStart(4, "0");
+
+const propostasPremium = [
+  proposta(3, {
+    quote_request_id: id("b", 1), contact_id: id("c", 1), atendimento_id: id("d", 1),
+    number: numeroDoDia(6 * HORA, 3), title: "Podcast itinerante na Feira de Noivas",
+    sources: [], file_path: null, file_size: null, pages: null, created_at: ha(6 * HORA),
+    kind: "premium", status: "enviada", service: "Podcast itinerante", total: 11800, pending_items: 1,
+    sent_at: ha(5 * HORA), sent_by: USUARIO.id, valid_until: diaIso(30 * DIA - 6 * HORA),
+    public_token: tokenSimulado("A"), public_days: 30, public_expires_at: em(30 * DIA - 6 * HORA),
+    views: 3, first_viewed_at: ha(4 * HORA), last_viewed_at: ha(40 * 60 * 1000),
+    accepted_at: null, accepted_name: null, decided_at: null, decided_by: null,
+    unconfirmed_prices: false, pdf_engine: null, pdf_error: null, updated_at: ha(5 * HORA), model: "simulado",
+    content: conteudoPremium({
+      titulo: "Podcast itinerante na Feira de Noivas",
+      subtitulo: "Souza Eventos · dois dias de conversas gravadas dentro do pavilhão",
+      cliente: { nome: "Maria Souza", empresa: "Souza Eventos" },
+      capa: { frase: "Cada conversa na feira vira conteúdo para o ano inteiro.", imagem: { origem: "galeria", arquivo: "haras-lounge-coberto-2026-v1.webp" } },
+      entendimento:
+        "A Souza Eventos quer gravar um podcast dentro da Feira de Noivas, nos dias 24 e 25 de outubro, no Centro de Convenções de Goiânia.\n\n" +
+        "O objetivo é transformar expositores e noivas em conteúdo: conversas curtas, com cara de programa, que alimentam as redes da feira antes, durante e depois do evento.",
+      solucao: [
+        { titulo: "Estúdio dentro da feira", descricao: "Montamos o estúdio itinerante com cenário da feira, três câmeras, luz e áudio profissional.", imagem: { origem: "galeria", arquivo: "podcast-entrevista-v1.webp" } },
+        { titulo: "Fila de convidados organizada", descricao: "A produção combina com a organização a agenda de expositores e convidados, sem atrasar a programação.", imagem: { origem: "galeria", arquivo: "evento-palco-camera.webp" } },
+        { titulo: "Edição para as redes", descricao: "Cada conversa sai editada, com abertura e identidade, pronta para publicar.", imagem: { origem: "galeria", arquivo: "edit-suite.webp" } },
+      ],
+      escopo_detalhado: [
+        { item: "Estúdio itinerante", descricao: "Cenário, luz, áudio e três câmeras com operação.", quantidade: 2, unidade: "dias" },
+        { item: "Montagem e desmontagem", descricao: "Transporte, montagem na véspera e desmontagem ao final.", quantidade: 1, unidade: "evento" },
+        { item: "Edição dos episódios", descricao: "Edição completa com correção de cor e tratamento de áudio.", quantidade: 12, unidade: "episódios" },
+      ],
+      entregas: ["12 episódios editados em 4K", "Versões para YouTube e Instagram", "Arquivos brutos das gravações"],
+      cronograma: [
+        { etapa: "Alinhamento de pautas com a organização", prazo: "até 17/10" },
+        { etapa: "Montagem do estúdio", prazo: "23/10" },
+        { etapa: "Gravação na feira", prazo: "24 e 25/10" },
+        { etapa: "Entrega dos episódios", prazo: "até 10 dias úteis após a feira" },
+      ],
+      investimento: investimentoSimulado(
+        [[6, 2], [7, 1], [8, 12], [null, 1, "Transmissão ao vivo do palco principal"]],
+        1000,
+        "50% na aprovação e 50% na entrega.",
+      ),
+      proximos_passos: ["Aprovar a proposta", "Alinhar a lista de convidados", "Assinar o contrato e pagar o sinal"],
+      observacoes: "A transmissão ao vivo depende da internet disponível no pavilhão.",
+    }),
+  }),
+  proposta(4, {
+    quote_request_id: id("b", 2), contact_id: id("c", 2), atendimento_id: id("d", 2),
+    number: numeroDoDia(2 * DIA, 1), title: "Leilão 360 do Haras Boa Vista",
+    sources: [], file_path: "propostas/" + id("b", 2) + "/" + numeroDoDia(2 * DIA, 1) + ".pdf", file_size: 2310000, pages: 11,
+    created_at: ha(2 * DIA), created_by: RUI.id,
+    kind: "premium", status: "aceita", service: "Leilão 360", total: 21500, pending_items: 0,
+    sent_at: ha(2 * DIA - HORA), sent_by: RUI.id, valid_until: diaIso(28 * DIA),
+    public_token: tokenSimulado("B"), public_days: 30, public_expires_at: em(28 * DIA),
+    views: 5, first_viewed_at: ha(2 * DIA - 2 * HORA), last_viewed_at: ha(3 * HORA),
+    accepted_at: ha(3 * HORA), accepted_name: "João Pedro Alves", decided_at: null, decided_by: null,
+    unconfirmed_prices: false, pdf_engine: "chrome", pdf_error: null, updated_at: ha(3 * HORA), model: "simulado",
+    content: conteudoPremium({
+      titulo: "Leilão 360 do Haras Boa Vista",
+      subtitulo: "Antes, durante e depois do leilão de novembro",
+      cliente: { nome: "João Pedro Alves", empresa: "Haras Boa Vista" },
+      capa: { frase: "O leilão começa antes do primeiro lote.", imagem: { origem: "galeria", arquivo: "camera-auction.webp" } },
+      entendimento: "O Haras Boa Vista fará o leilão anual na segunda quinzena de novembro e quer aquecer os compradores com conteúdo dos lotes.",
+      solucao: [
+        { titulo: "Aquecimento dos lotes", descricao: "Diária de captação na fazenda para gravar os lotes e os bastidores.", imagem: { origem: "galeria", arquivo: "cattle-rays.webp" } },
+        { titulo: "Transmissão com direção", descricao: "Multicâmera com direção de corte ao vivo durante todo o leilão.", imagem: { origem: "galeria", arquivo: "producao-campo-equipe.webp" } },
+      ],
+      escopo_detalhado: [],
+      entregas: ["Vídeos dos lotes", "Transmissão completa gravada", "Melhores momentos"],
+      cronograma: [{ etapa: "Captação dos lotes", prazo: "início de novembro" }, { etapa: "Leilão", prazo: "a definir" }],
+      investimento: investimentoSimulado([[12, 1], [13, 1]], null, "30% na assinatura e 70% até o dia do leilão."),
+      proximos_passos: ["Confirmar a data do leilão", "Assinar o contrato"],
+    }),
+  }),
+  proposta(5, {
+    quote_request_id: id("b", 3), contact_id: id("c", 3), atendimento_id: id("d", 3),
+    number: numeroDoDia(3 * HORA, 4), title: "Conteúdo mensal da Clínica Vitta",
+    sources: [], file_path: null, file_size: null, pages: null, created_at: ha(3 * HORA),
+    kind: "premium", status: "gerada", service: "Conteúdo recorrente", total: 16500, pending_items: 0,
+    sent_at: null, sent_by: null, valid_until: diaIso(30 * DIA - 3 * HORA),
+    public_token: tokenSimulado("C"), public_days: 30, public_expires_at: em(30 * DIA - 3 * HORA),
+    views: 0, first_viewed_at: null, last_viewed_at: null,
+    accepted_at: null, accepted_name: null, decided_at: null, decided_by: null,
+    unconfirmed_prices: true, pdf_engine: null, pdf_error: null, updated_at: ha(3 * HORA), model: "simulado",
+    internal_notes: {
+      pendencias: ["Confirmar com a Carla quantos vídeos por mês e para quais redes."],
+      avisos: ["Esta proposta usa valores não confirmados da tabela de preços. Confirme os itens em Ajustes → Tabela de preços antes de enviar."],
+      atualizado_em: ha(3 * HORA),
+    },
+    content: conteudoPremium({
+      titulo: "Conteúdo mensal da Clínica Vitta",
+      subtitulo: "Vídeos e cortes todo mês, com método e cadência",
+      cliente: { nome: "Carla Mendes", empresa: "Clínica Vitta" },
+      capa: { frase: "Conhecimento de quem cuida, em vídeo, todo mês.", imagem: { origem: "galeria", arquivo: "consultoria-hero-estudio-v1.webp" } },
+      entendimento: "A Clínica Vitta quer começar a publicar vídeos todos os meses, com a equipe médica explicando temas de saúde.",
+      solucao: [{ titulo: "Plano editorial", descricao: "Diagnóstico, calendário e uma diária de captação por mês.", imagem: null }],
+      escopo_detalhado: [],
+      entregas: ["4 vídeos por mês", "8 cortes verticais"],
+      cronograma: [{ etapa: "Diagnóstico editorial", prazo: "primeira semana" }],
+      investimento: investimentoSimulado([[23, 3, "Plano mensal de conteúdo (3 meses)"]]),
+      proximos_passos: ["Aprovar o plano", "Agendar a primeira diária"],
+    }),
+  }),
+];
+propostas.push(...propostasPremium);
+
 /** Arquivos guardados na memória: "bucket/caminho" -> { bytes, tipo }. */
 const arquivos = new Map();
 
@@ -449,6 +616,7 @@ const tabelas = {
   ar1_wa_outbox: [],
   ar1_context_docs: documentos,
   ar1_proposals: propostas,
+  ar1_price_items: itensDePreco,
   ar1_settings: [
     { key: "atendimento.instrucoes", value: "Tom direto e cordial. Não prometa preço nem data. Assine como Equipe AR1 Films." },
     {
@@ -550,8 +718,68 @@ function respostaDoResumo(pedido) {
   };
 }
 
+// Proposta premium: escolhe itens da tabela por id (o servidor recalcula os
+// valores) e "esquece" um valor em reais nas condições, para ver o código
+// tirando o trecho e avisando a equipe.
+const RESPOSTA_PREMIUM = {
+  titulo: "Podcast itinerante na Feira de Noivas",
+  subtitulo: "Souza Eventos · dois dias de conversas gravadas dentro do pavilhão",
+  capa: { frase: "Cada conversa na feira vira conteúdo para o ano inteiro.", imagem: "haras-lounge-coberto-2026-v1.webp" },
+  entendimento:
+    "A Souza Eventos quer gravar um podcast dentro da Feira de Noivas, nos dias 24 e 25 de outubro, no Centro de Convenções de Goiânia.\n\n" +
+    "O objetivo é transformar expositores e noivas em conteúdo para as redes da feira antes, durante e depois do evento.",
+  por_que_ar1: [
+    "Experiência de estrada: mais de 4 mil episódios gravados e transmitidos com equipe própria.",
+    "Estrutura completa: estúdio itinerante montado dentro do evento, com cenário e três câmeras.",
+    "Conteúdo que continua trabalhando: cada conversa sai pronta para as redes.",
+  ],
+  solucao: [
+    { titulo: "Estúdio dentro da feira", descricao: "Montamos o estúdio itinerante com cenário da feira, três câmeras, luz e áudio profissional.", imagem: "podcast-entrevista-v1.webp" },
+    { titulo: "Fila de convidados organizada", descricao: "A produção combina a agenda de expositores com a organização.", imagem: null },
+    { titulo: "Edição para as redes", descricao: "Cada conversa sai editada, com abertura e identidade.", imagem: "edit-suite.webp" },
+  ],
+  escopo_detalhado: [
+    { item: "Estúdio itinerante", descricao: "Cenário, luz, áudio e três câmeras com operação.", quantidade: 2, unidade: "dias" },
+    { item: "Edição dos episódios", descricao: "Edição completa com correção de cor.", quantidade: 12, unidade: "episódios" },
+  ],
+  entregas: ["12 episódios editados em 4K", "Versões para YouTube e Instagram"],
+  cronograma: [
+    { etapa: "Montagem do estúdio", prazo: "23/10" },
+    { etapa: "Gravação na feira", prazo: "24 e 25/10" },
+  ],
+  investimento: {
+    itens: [
+      { descricao: "Diária do estúdio itinerante", quantidade: 2, price_item_id: "10000000-0000-4000-8000-000000000006" },
+      { descricao: "Montagem e desmontagem", quantidade: 1, price_item_id: "10000000-0000-4000-8000-000000000007" },
+      { descricao: "Edição de episódio gravado no evento", quantidade: 12, price_item_id: "10000000-0000-4000-8000-000000000008" },
+      { descricao: "Transmissão ao vivo do palco principal", quantidade: 1, price_item_id: null },
+    ],
+    condicoes_pagamento: "50% na aprovação e 50% na entrega. Sinal de R$ 2.000 para reservar a data.",
+  },
+  proximos_passos: ["Aprovar a proposta", "Alinhar a lista de convidados", "Assinar o contrato"],
+  validade_dias: null,
+  observacoes: "A transmissão ao vivo depende da internet disponível no pavilhão.",
+  pendencias: ["Confirmar quantos episódios serão gravados por dia."],
+};
+
+const RESPOSTA_PEDIDO = {
+  servico: "Podcast itinerante",
+  servicos_adicionais: ["Transmissão ao vivo"],
+  descricao: "Podcast itinerante durante a Feira de Noivas, com dois dias de gravação e o valor atualizado para a diretoria.",
+  data_periodo: "24 e 25 de outubro",
+  local: "Centro de Convenções de Goiânia",
+  publico_objetivo: "Noivas e expositores da feira",
+  quantidades: "2 dias de gravação",
+  observacoes: "A cliente leva a proposta para a diretoria na primeira semana de outubro.",
+  cidade: "Goiânia",
+  empresa: "Souza Eventos",
+  email: null,
+};
+
 function respostaDaIA(pedido) {
   const texto = JSON.stringify(pedido ?? {});
+  if (texto.includes("PROPOSTA PREMIUM DA AR1")) return RESPOSTA_PREMIUM;
+  if (texto.includes("PREENCHER O PEDIDO A PARTIR DA CONVERSA")) return RESPOSTA_PEDIDO;
   if (texto.includes("motivo_da_retomada")) return RESPOSTA_RETOMADA;
   if (texto.includes("REGRA DOS VALORES")) return RESPOSTA_PROPOSTA;
   if (texto.includes("<numeros>")) return respostaDoResumo(pedido);
@@ -738,7 +966,7 @@ const servidor = createServer(async (req, res) => {
           type: "error",
           error: {
             type: "invalid_request_error",
-            message: "O simulador só responde pedidos de retomada, de proposta e de resumo diário.",
+            message: "O simulador só responde pedidos de retomada, de proposta (simples e premium), de pedido e de resumo diário.",
           },
         });
   }

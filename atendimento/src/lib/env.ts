@@ -13,6 +13,16 @@ function obrigatoria(nome: string): string {
 /** Modelo padrão da transcrição de áudio (AI_AUDIO_MODEL). */
 export const MODELO_AUDIO_PADRAO = "google/gemini-3.5-flash-lite";
 
+/** Modelo padrão das propostas premium na OpenRouter (AI_MODEL_PROPOSTAS). */
+export const MODELO_PROPOSTAS_PADRAO = "anthropic/claude-opus-5.5";
+/** O mesmo modelo, no nome da API da Anthropic. */
+export const MODELO_PROPOSTAS_PADRAO_ANTHROPIC = "claude-opus-5-5";
+
+/** Versão do Chromium usada no PDF (@sparticuz/chromium-min) e o pacote correspondente. */
+export const VERSAO_CHROMIUM = "153.0.0";
+export const CHROMIUM_PACK_URL_PADRAO =
+  `https://github.com/Sparticuz/chromium/releases/download/v${VERSAO_CHROMIUM}/chromium-v${VERSAO_CHROMIUM}-pack.x64.tar`;
+
 export type ProvedorIA = "openrouter" | "anthropic";
 export type ProvedorWhatsapp = "bridge" | "zapi";
 
@@ -38,6 +48,15 @@ export const env = {
     return this.aiProvider === "anthropic"
       ? process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5"
       : "anthropic/claude-sonnet-5.5";
+  },
+  /**
+   * Modelo que redige as propostas premium (AI_MODEL_PROPOSTAS). Padrão:
+   * "anthropic/claude-opus-5.5" na OpenRouter ou "claude-opus-5-5" na Anthropic.
+   */
+  get aiModelPropostas(): string {
+    const v = (process.env.AI_MODEL_PROPOSTAS ?? "").trim();
+    if (v) return v;
+    return this.aiProvider === "anthropic" ? MODELO_PROPOSTAS_PADRAO_ANTHROPIC : MODELO_PROPOSTAS_PADRAO;
   },
   /** Modelo com entrada de áudio usado na transcrição (sempre pela OpenRouter). */
   get aiAudioModel(): string {
@@ -70,6 +89,15 @@ export const env = {
   /** Segredo do cron da Vercel (opcional: sem ele, o cron não é aceito). */
   get cronSecret(): string | null {
     return process.env.CRON_SECRET || null;
+  },
+
+  /** Pacote do Chromium para o PDF na Vercel (CHROMIUM_PACK_URL). */
+  get chromiumPackUrl(): string {
+    return (process.env.CHROMIUM_PACK_URL ?? "").trim() || CHROMIUM_PACK_URL_PADRAO;
+  },
+  /** Caminho de um Chrome/Edge local para gerar o PDF fora da Vercel (opcional). */
+  get chromeLocal(): string | null {
+    return (process.env.CHROME ?? "").trim() || null;
   },
 
   /** URL pública do próprio app, sem barra no fim. */

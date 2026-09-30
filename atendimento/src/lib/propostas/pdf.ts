@@ -42,6 +42,12 @@ export interface EntradaPdf {
   emitidaEm: string;
   /** Dia até quando vale, AAAA-MM-DD (Brasília). */
   validaAte: string;
+  /** Máximo de páginas (padrão 3). A reserva da proposta premium usa mais. */
+  maximoDePaginas?: number;
+  /** Desconto em reais já negociado: sai como Subtotal / Desconto / Total. */
+  desconto?: number | null;
+  /** Texto dos itens sem valor (padrão "a definir"; a premium usa "sob consulta"). */
+  textoSemValor?: string;
 }
 
 export interface PdfGerado {
@@ -257,6 +263,8 @@ class Documento {
 
 export async function gerarPdfDaProposta(entrada: EntradaPdf): Promise<PdfGerado> {
   const { proposta: p, numero } = entrada;
+  const maximoDePaginas = entrada.maximoDePaginas ?? MAXIMO_DE_PAGINAS;
+  const semValor = entrada.textoSemValor ?? TEXTO_A_DEFINIR;
   const dados = await lerArquivos();
 
   const pdf = await PDFDocument.create();
@@ -461,13 +469,30 @@ export async function gerarPdfDaProposta(entrada: EntradaPdf): Promise<PdfGerado
       doc.garantir(altura);
       const topo = doc.y;
       descricao.forEach((l, k) => doc.linha(l, MARGEM, topo - 15 - k * 14, estiloCorpo));
-      if (item.valor === null) doc.linha(TEXTO_A_DEFINIR, LARGURA - MARGEM, topo - 15, { ...estiloCorpo, cor: APOIO }, "direita");
+      if (item.valor === null) doc.linha(semValor, LARGURA - MARGEM, topo - 15, { ...estiloCorpo, cor: APOIO }, "direita");
       else doc.linha(reaisComCentavos(item.valor), LARGURA - MARGEM, topo - 15, estiloForte, "direita");
       doc.y = topo - altura;
       doc.regua(doc.y);
     }
 
     const parcial = total.itensComValor > 0 && total.itensADefinir > 0;
+    const desconto =
+      typeof entrada.desconto === "number" && entrada.desconto > 0 && total.itensComValor > 0
+        ? Math.min(entrada.desconto, total.total)
+        : 0;
+    if (desconto > 0) {
+      doc.garantir(34 + 58);
+      for (const [rotulo, valor] of [
+        ["Subtotal", reaisComCentavos(total.total)],
+        ["Desconto", `− ${reaisComCentavos(desconto)}`],
+      ] as const) {
+        doc.y -= 4;
+        doc.linha(rotulo, MARGEM + 14, doc.y - 11, estiloCorpo);
+        doc.linha(valor, LARGURA - MARGEM - 12, doc.y - 11, estiloForte, "direita");
+        doc.y -= 13;
+      }
+    }
+    const valorFinal = Math.round((total.total - desconto) * 100) / 100;
     doc.garantir(parcial ? 58 : 42);
     doc.y -= 6;
     doc.pagina.drawRectangle({ x: MARGEM, y: doc.y - 30, width: LARGURA_UTIL, height: 30, color: FUNDO_TOTAL });
@@ -479,7 +504,7 @@ export async function gerarPdfDaProposta(entrada: EntradaPdf): Promise<PdfGerado
       espacamento: 0.7,
     });
     doc.linha(
-      total.itensComValor > 0 ? reaisComCentavos(total.total) : TEXTO_A_DEFINIR,
+      total.itensComValor > 0 ? reaisComCentavos(valorFinal) : semValor,
       LARGURA - MARGEM - 12,
       doc.y - 20,
       { fonte: destaque, tamanho: 13, cor: total.itensComValor > 0 ? PRETO : APOIO },
@@ -490,8 +515,8 @@ export async function gerarPdfDaProposta(entrada: EntradaPdf): Promise<PdfGerado
       doc.y -= 4;
       doc.paragrafo(
         total.itensADefinir === 1
-          ? "O item a definir não entra no total parcial."
-          : "Os itens a definir não entram no total parcial.",
+          ? `O item ${semValor} não entra no total parcial.`
+          : `Os itens ${semValor} não entram no total parcial.`,
         estiloApoio,
       );
     }
@@ -520,9 +545,9 @@ export async function gerarPdfDaProposta(entrada: EntradaPdf): Promise<PdfGerado
     estiloApoio,
   );
 
-  if (doc.paginas.length > MAXIMO_DE_PAGINAS) {
+  if (doc.paginas.length > maximoDePaginas) {
     throw new ErroPdf(
-      `A proposta ficou com ${doc.paginas.length} páginas e o máximo é ${MAXIMO_DE_PAGINAS}. ` +
+      `A proposta ficou com ${doc.paginas.length} páginas e o máximo é ${maximoDePaginas}. ` +
         "Encurte os textos ou junte itens e gere de novo.",
     );
   }

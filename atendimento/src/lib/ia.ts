@@ -30,6 +30,8 @@ export interface PedidoEstruturado<T extends z.ZodType> {
   maxTokens?: number;
   /** Tempo máximo de espera pela resposta (ms). Padrão: 50 s. */
   timeoutMs?: number;
+  /** Modelo diferente do AI_MODEL (ex.: o das propostas, AI_MODEL_PROPOSTAS). */
+  modelo?: string;
 }
 
 const TIMEOUT_PADRAO_MS = 50_000;
@@ -159,7 +161,7 @@ async function chamarOpenRouter(
 async function viaOpenRouter<T extends z.ZodType>(
   pedido: PedidoEstruturado<T>,
 ): Promise<RespostaEstruturada<z.infer<T>>> {
-  const modelo = env.aiModel;
+  const modelo = pedido.modelo || env.aiModel;
   const schema = jsonSchemaDe(pedido.esquema);
   const base = {
     model: modelo,
@@ -267,7 +269,7 @@ function mensagemAnthropic(e: unknown): string {
 async function viaAnthropic<T extends z.ZodType>(
   pedido: PedidoEstruturado<T>,
 ): Promise<RespostaEstruturada<z.infer<T>>> {
-  const modelo = env.aiModel;
+  const modelo = pedido.modelo || env.aiModel;
   try {
     const resposta = await clienteAnthropic().beta.messages.parse(
       {

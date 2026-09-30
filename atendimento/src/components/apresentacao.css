@@ -1,0 +1,662 @@
+/* Apresentação da proposta premium (página pública, prévia do editor e PDF).
+   Marca AR1 Films: fundo #111315, grafite #292d30, osso #f2efe8, cobre #b86b45,
+   títulos Montserrat 800 em caixa alta, texto Inter. */
+
+.ap {
+  --ap-fundo: #111315;
+  --ap-grafite: #292d30;
+  --ap-osso: #f2efe8;
+  --ap-cobre: #b86b45;
+  --ap-cobre-claro: #d08a63;
+  --ap-apoio: #b9c0bf;
+  --ap-linha: rgba(242, 239, 232, 0.14);
+  --ap-x: clamp(20px, 6vw, 96px);
+  --ap-y: clamp(28px, 7vh, 80px);
+  background: var(--ap-fundo);
+  color: var(--ap-osso);
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.55;
+}
+
+.ap-rolagem {
+  scroll-snap-type: y proximity;
+}
+
+.ap-lamina {
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--ap-y) var(--ap-x);
+  overflow: hidden;
+  scroll-snap-align: start;
+  isolation: isolate;
+  break-after: page;
+  page-break-after: always;
+}
+
+.ap-fundo {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-size: cover;
+  background-position: center;
+}
+
+.ap-veu {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(17, 19, 21, 0.55) 0%, rgba(17, 19, 21, 0.78) 55%, rgba(17, 19, 21, 0.95) 100%);
+}
+
+.ap-lamina--grafite {
+  background: var(--ap-grafite);
+}
+
+.ap-lamina--escura {
+  background: var(--ap-fundo);
+}
+
+.ap-lamina--capa .ap-veu {
+  background: linear-gradient(90deg, rgba(17, 19, 21, 0.92) 0%, rgba(17, 19, 21, 0.72) 55%, rgba(17, 19, 21, 0.35) 100%);
+}
+
+.ap-titulo,
+.ap-h1,
+.ap-h2 {
+  font-family: var(--font-montserrat), Montserrat, system-ui, sans-serif;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.02;
+  margin: 0;
+}
+
+.ap-h1 {
+  font-size: clamp(2rem, 6.2vw, 5rem);
+  max-width: 14ch;
+}
+
+.ap-h2 {
+  font-size: clamp(1.6rem, 3.8vw, 3.2rem);
+  max-width: 16ch;
+}
+
+.ap-h3 {
+  font-family: var(--font-montserrat), Montserrat, system-ui, sans-serif;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: clamp(0.95rem, 1.4vw, 1.2rem);
+  line-height: 1.2;
+  margin: 0;
+}
+
+.ap-marca {
+  display: inline-block;
+  width: 56px;
+  height: 3px;
+  background: var(--ap-cobre);
+  margin: 1rem 0 1.4rem;
+}
+
+.ap-olho {
+  font-family: var(--font-montserrat), Montserrat, system-ui, sans-serif;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.72rem;
+  color: var(--ap-cobre-claro);
+  margin: 0 0 0.9rem;
+}
+
+.ap-texto {
+  font-size: clamp(1.02rem, 1.5vw, 1.32rem);
+  color: var(--ap-osso);
+  max-width: 62ch;
+}
+
+.ap-texto p + p {
+  margin-top: 1em;
+}
+
+.ap-apoio {
+  color: var(--ap-apoio);
+}
+
+.ap-frase {
+  font-size: clamp(1.15rem, 2vw, 1.7rem);
+  line-height: 1.35;
+  max-width: 34ch;
+  color: var(--ap-osso);
+  margin: 1.4rem 0 0;
+}
+
+.ap-capa-topo {
+  position: absolute;
+  top: var(--ap-y);
+  left: var(--ap-x);
+  right: var(--ap-x);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ap-logo {
+  height: clamp(30px, 4vw, 48px);
+  width: auto;
+}
+
+.ap-logo-cliente {
+  max-height: clamp(36px, 5vw, 64px);
+  max-width: 40vw;
+  width: auto;
+  object-fit: contain;
+}
+
+.ap-capa-corpo {
+  margin-top: clamp(64px, 12vh, 120px);
+}
+
+.ap-capa-rodape {
+  margin-top: clamp(28px, 6vh, 56px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 2.2rem;
+  font-size: 0.86rem;
+  color: var(--ap-apoio);
+}
+
+.ap-capa-rodape strong {
+  color: var(--ap-osso);
+  font-weight: 600;
+}
+
+.ap-duas {
+  display: grid;
+  gap: clamp(1.4rem, 4vw, 4rem);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .ap-duas {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+
+.ap-grade {
+  display: grid;
+  gap: clamp(0.9rem, 2vw, 1.6rem);
+  margin-top: clamp(1.2rem, 3vh, 2.4rem);
+}
+
+.ap-grade--3 {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+
+.ap-cartao {
+  background: rgba(41, 45, 48, 0.82);
+  border: 1px solid var(--ap-linha);
+  border-radius: 14px;
+  padding: clamp(1rem, 2vw, 1.6rem);
+  backdrop-filter: blur(4px);
+}
+
+.ap-cartao--foto {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ap-cartao-foto {
+  aspect-ratio: 16 / 9;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--ap-grafite);
+}
+
+.ap-cartao-foto--vazia {
+  background: linear-gradient(135deg, var(--ap-grafite), #1c1f22);
+}
+
+.ap-cartao-corpo {
+  padding: clamp(1rem, 2vw, 1.4rem);
+}
+
+.ap-cartao p {
+  margin: 0.55rem 0 0;
+  color: var(--ap-apoio);
+  font-size: 0.98rem;
+}
+
+.ap-numero {
+  font-family: var(--font-montserrat), Montserrat, system-ui, sans-serif;
+  font-weight: 800;
+  color: var(--ap-cobre);
+  font-size: 1.6rem;
+  line-height: 1;
+  margin-bottom: 0.7rem;
+}
+
+.ap-lista {
+  list-style: none;
+  margin: clamp(1.2rem, 3vh, 2rem) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem 2rem;
+}
+
+.ap-lista--2 {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+}
+
+.ap-lista li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.9rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--ap-linha);
+  font-size: clamp(0.98rem, 1.3vw, 1.15rem);
+}
+
+.ap-lista .ap-n {
+  font-family: var(--font-montserrat), Montserrat, system-ui, sans-serif;
+  font-weight: 800;
+  color: var(--ap-cobre);
+  font-size: 0.85em;
+  padding-top: 0.15em;
+  min-width: 1.8em;
+}
+
+.ap-lista .ap-check {
+  width: 1.1em;
+  height: 1.1em;
+  margin-top: 0.3em;
+  border: 2px solid var(--ap-cobre);
+  border-radius: 4px;
+  position: relative;
+}
+
+.ap-lista .ap-check::after {
+  content: "";
+  position: absolute;
+  left: 0.28em;
+  top: 0.05em;
+  width: 0.3em;
+  height: 0.6em;
+  border: solid var(--ap-cobre);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.ap-lista small {
+  display: block;
+  color: var(--ap-apoio);
+  font-size: 0.86em;
+  margin-top: 0.15rem;
+}
+
+.ap-lista .ap-qtd {
+  color: var(--ap-cobre-claro);
+  font-weight: 600;
+  font-size: 0.86em;
+  margin-left: 0.6rem;
+  white-space: nowrap;
+}
+
+/* Cronograma */
+.ap-linha-do-tempo {
+  list-style: none;
+  margin: clamp(1.4rem, 4vh, 2.6rem) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1.2rem;
+}
+
+@media (min-width: 900px) {
+  .ap-linha-do-tempo {
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+  }
+}
+
+.ap-linha-do-tempo li {
+  position: relative;
+  padding-top: 1.4rem;
+  border-top: 2px solid var(--ap-linha);
+}
+
+.ap-linha-do-tempo li::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ap-cobre);
+}
+
+.ap-linha-do-tempo .ap-prazo {
+  color: var(--ap-cobre-claro);
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ap-linha-do-tempo .ap-etapa {
+  margin-top: 0.3rem;
+  font-size: clamp(1rem, 1.3vw, 1.15rem);
+}
+
+/* Investimento */
+.ap-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: clamp(1.2rem, 3vh, 2rem);
+  font-size: clamp(0.94rem, 1.2vw, 1.08rem);
+}
+
+.ap-tabela th {
+  text-align: left;
+  font-family: var(--font-montserrat), Montserrat, system-ui, sans-serif;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.68rem;
+  color: var(--ap-cobre-claro);
+  padding: 0 0.6rem 0.7rem 0;
+  border-bottom: 1px solid var(--ap-cobre);
+}
+
+.ap-tabela td {
+  padding: 0.85rem 0.6rem 0.85rem 0;
+  border-bottom: 1px solid var(--ap-linha);
+  vertical-align: top;
+}
+
+.ap-tabela .ap-dir {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ap-tabela .ap-un {
+  color: var(--ap-apoio);
+  font-size: 0.86em;
+}
+
+.ap-tabela .ap-consulta {
+  color: var(--ap-apoio);
+  font-style: italic;
+}
+
+.ap-total {
+  margin-top: 1.2rem;
+  display: grid;
+  gap: 0.4rem;
+  justify-content: end;
+  text-align: right;
+}
+
+.ap-total-linha {
+  display: flex;
+  gap: 2.5rem;
+  justify-content: space-between;
+  color: var(--ap-apoio);
+  font-size: 0.95rem;
+}
+
+.ap-total-final {
+  display: flex;
+  gap: 2.5rem;
+  justify-content: space-between;
+  align-items: baseline;
+  border-top: 2px solid var(--ap-cobre);
+  padding-top: 0.7rem;
+  margin-top: 0.3rem;
+}
+
+.ap-total-final .ap-h3 {
+  color: var(--ap-cobre-claro);
+}
+
+.ap-total-final .ap-valor {
+  font-family: var(--font-montserrat), Montserrat, system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  letter-spacing: 0.02em;
+}
+
+.ap-condicoes {
+  margin-top: 1.4rem;
+  color: var(--ap-apoio);
+  font-size: 0.95rem;
+  max-width: 70ch;
+}
+
+/* Fecho e ações do cliente */
+.ap-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: clamp(1.4rem, 3vh, 2.2rem);
+}
+
+.ap-botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.95rem 1.6rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 1rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
+  font-family: inherit;
+}
+
+.ap-botao:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ap-botao--cobre {
+  background: var(--ap-cobre);
+  color: #fff;
+}
+
+.ap-botao--cobre:hover:not(:disabled) {
+  background: var(--ap-cobre-claro);
+}
+
+.ap-botao--contorno {
+  background: transparent;
+  color: var(--ap-osso);
+  border-color: rgba(242, 239, 232, 0.35);
+}
+
+.ap-botao--contorno:hover:not(:disabled) {
+  border-color: var(--ap-osso);
+}
+
+.ap-campo {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 10px;
+  border: 1px solid rgba(242, 239, 232, 0.25);
+  background: rgba(17, 19, 21, 0.6);
+  color: var(--ap-osso);
+  padding: 0.85rem 1rem;
+  font: inherit;
+  outline: none;
+}
+
+.ap-campo:focus {
+  border-color: var(--ap-cobre);
+}
+
+.ap-rodape {
+  position: absolute;
+  left: var(--ap-x);
+  right: var(--ap-x);
+  bottom: clamp(14px, 2.5vh, 26px);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(185, 192, 191, 0.75);
+}
+
+.ap-contatos {
+  margin-top: 1.6rem;
+  color: var(--ap-apoio);
+  font-size: 0.92rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.6rem;
+}
+
+.ap-aviso {
+  margin-top: 1rem;
+  color: var(--ap-apoio);
+  font-size: 0.9rem;
+}
+
+/* Prévia dentro do editor: cabe na coluna e não rola a página inteira. */
+.ap--previa .ap-lamina {
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  padding: clamp(18px, 4%, 48px) clamp(20px, 5%, 56px);
+  --ap-x: clamp(20px, 5%, 56px);
+  --ap-y: clamp(18px, 4%, 48px);
+  scroll-snap-align: none;
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+
+.ap--previa .ap-capa-corpo {
+  margin-top: clamp(40px, 10%, 90px);
+}
+
+/* Impressão (PDF pelo Chrome): uma lâmina A4 paisagem por seção. */
+@page {
+  size: A4 landscape;
+  margin: 0;
+}
+
+.ap--impressao {
+  width: 297mm;
+  margin: 0 auto;
+}
+
+@media print {
+  .ap-lamina {
+    width: 297mm;
+    height: 210mm;
+    min-height: 0;
+    padding: 14mm 18mm;
+    --ap-x: 18mm;
+    --ap-y: 14mm;
+    scroll-snap-align: none;
+    justify-content: center;
+    overflow: hidden;
+  }
+}
+
+.ap--impressao .ap-lamina {
+  width: 297mm;
+  height: 210mm;
+  min-height: 0;
+  padding: 14mm 18mm;
+  --ap-x: 18mm;
+  --ap-y: 14mm;
+  scroll-snap-align: none;
+  overflow: hidden;
+}
+
+.ap--impressao .ap-h1 {
+  font-size: 44pt;
+}
+
+.ap--impressao .ap-h2 {
+  font-size: 30pt;
+}
+
+.ap--impressao .ap-texto {
+  font-size: 12.5pt;
+}
+
+.ap--impressao .ap-frase {
+  font-size: 16pt;
+}
+
+.ap--impressao .ap-lista li,
+.ap--impressao .ap-tabela,
+.ap--impressao .ap-cartao p,
+.ap--impressao .ap-linha-do-tempo .ap-etapa {
+  font-size: 10.5pt;
+}
+
+.ap--impressao .ap-duas {
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+}
+
+.ap--impressao .ap-linha-do-tempo {
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.ap--impressao .ap-grade--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.ap--impressao .ap-lista--2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.ap--impressao .ap-acoes,
+.ap--impressao .ap-so-tela {
+  display: none;
+}
+
+.ap--impressao .ap-capa-corpo {
+  margin-top: 46mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #111315 !important;
+    margin: 0;
+  }
+
+  .ap-lamina:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .ap-acoes,
+  .ap-so-tela {
+    display: none !important;
+  }
+
+  .ap-fundo,
+  .ap-veu,
+  .ap-lamina,
+  .ap-cartao,
+  .ap-cartao-foto {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

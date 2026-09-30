@@ -3,28 +3,38 @@ import { respostaNaoAutorizado, sessaoDaEquipe } from "@/lib/auth";
 import { validarProposta } from "@/lib/propostas/proposta";
 import { erro, lerCorpo, respostaDeErro } from "@/lib/propostas/respostas";
 import { listarPropostas } from "@/lib/propostas/registro";
+import { listarTodasAsPropostas } from "@/lib/propostas/premium/servidor";
 import { gerarProposta } from "@/lib/propostas/servidor";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-/** GET /api/propostas?oportunidade=<id> — histórico de propostas da oportunidade. */
+/**
+ * GET /api/propostas?oportunidade=<id> — histórico de propostas da oportunidade.
+ * GET /api/propostas?busca=…&situacao=… — todas as propostas (tela Propostas).
+ */
 export async function GET(request: Request) {
   const sessao = await sessaoDaEquipe();
   if (!sessao) return respostaNaoAutorizado();
 
-  const oportunidade = new URL(request.url).searchParams.get("oportunidade") ?? "";
+  const parametros = new URL(request.url).searchParams;
+  const oportunidade = parametros.get("oportunidade");
   try {
-    return NextResponse.json({ ok: true, propostas: await listarPropostas(oportunidade) });
+    if (oportunidade) return NextResponse.json({ ok: true, propostas: await listarPropostas(oportunidade) });
+    const propostas = await listarTodasAsPropostas({
+      busca: parametros.get("busca") ?? "",
+      status: parametros.get("situacao") ?? "",
+    });
+    return NextResponse.json({ ok: true, propostas });
   } catch (e) {
     return respostaDeErro(e, "propostas");
   }
 }
 
 /**
- * POST /api/propostas — gera o PDF da proposta que a pessoa revisou, guarda
- * no Storage privado e registra no histórico. Nada é enviado ao cliente aqui.
+ * POST /api/propostas — gera o PDF da proposta simples que a pessoa revisou,
+ * guarda no Storage privado e registra no histórico. Nada é enviado ao cliente aqui.
  */
 export async function POST(request: Request) {
   const sessao = await sessaoDaEquipe();

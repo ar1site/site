@@ -14,6 +14,7 @@ import { dataHora, tempoRelativo } from "@/lib/formato";
 import { supabaseNoNavegador } from "@/lib/supabase/browser";
 import { ContextoDocs } from "./ContextoDocs";
 import { SecaoResumoDiario } from "./ResumoDiario";
+import { SecaoTabelaDePrecos } from "./TabelaDePrecos";
 import { useUsuarioAtual } from "./Shell";
 
 interface StatusResposta {
@@ -44,6 +45,7 @@ export function Configuracoes() {
       <SecaoInstrucoes podeEditar={usuario.role === "admin"} />
       <SecaoRetomadas podeEditar={usuario.role === "admin"} />
       <SecaoResumoDiario podeEditar={usuario.role === "admin"} />
+      <SecaoTabelaDePrecos podeEditar={usuario.role === "admin"} />
       <SecaoBaseDeConhecimento />
       <SecaoEquipe />
     </div>

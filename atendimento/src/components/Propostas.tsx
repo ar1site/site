@@ -1,9 +1,11 @@
 "use client";
 
-// Propostas da oportunidade: "Montar proposta" (a IA rascunha, a pessoa edita
-// e gera o PDF), o histórico, o envio do link pelo WhatsApp e as sugestões
-// que aparecem depois de gerar. Nada sai para o cliente sem o clique de alguém.
+// Propostas da oportunidade: o botão "Nova proposta" leva ao fluxo premium
+// (/propostas/nova já preenchida), o histórico lista as propostas premium e
+// as em PDF antigas, com envio do link pelo WhatsApp e as sugestões que
+// aparecem depois de gerar. Nada sai para o cliente sem o clique de alguém.
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useEquipe } from "@/lib/equipe";
 import { atualizarOportunidade } from "@/lib/funil/dados";
@@ -16,12 +18,14 @@ import {
   enviarLink,
   lerRascunhoLocal,
   pedirLink,
-  pedirRascunho,
   type RascunhoRecebido,
 } from "@/lib/propostas/dados";
 import { paraEditor } from "@/lib/propostas/editor";
 import { textoTemLink } from "@/lib/propostas/mensagem";
-import { diaPorExtenso, textoDoTotal } from "@/lib/propostas/proposta";
+import { ehPremium } from "@/lib/propostas/premium/conteudo";
+import { textoDoTotalPremium } from "@/lib/propostas/premium/investimento";
+import { ROTULO_STATUS_PROPOSTA } from "@/lib/propostas/premium/publico";
+import { diaPorExtenso, textoDoTotal, type Proposta } from "@/lib/propostas/proposta";
 import { sugestoesAposProposta } from "@/lib/propostas/sugestoes";
 import type { Oportunidade, PropostaRegistro } from "@/lib/tipos";
 import { Dialogo } from "./DialogosFunil";
@@ -29,10 +33,10 @@ import { EditorProposta, type AberturaDoEditor } from "./EditorProposta";
 
 type Aviso = { tipo: "erro" | "ok"; texto: string } | null;
 
-/** Rascunho "de origem" de uma proposta já gerada, para abrir o editor como nova versão. */
-function rascunhoDoHistorico(p: PropostaRegistro): RascunhoRecebido {
+/** Rascunho "de origem" de uma proposta em PDF já gerada, para abrir o editor antigo como nova versão. */
+function rascunhoDoHistorico(p: PropostaRegistro, conteudo: Proposta): RascunhoRecebido {
   return {
-    proposta: p.content,
+    proposta: conteudo,
     origens: {
       titulo: "vazio",
       cliente: "vazio",
@@ -55,12 +59,26 @@ function rascunhoDoHistorico(p: PropostaRegistro): RascunhoRecebido {
   };
 }
 
-function totalDoRegistro(p: PropostaRegistro): string {
+export function totalDoRegistro(p: PropostaRegistro): string {
+  if (ehPremium(p.content)) return textoDoTotalPremium(p.content.investimento);
   return textoDoTotal({
     total: p.total ?? 0,
     itensComValor: p.total === null ? 0 : 1,
     itensADefinir: p.pending_items,
   });
+}
+
+export function SeloSituacao({ p, agora }: { p: PropostaRegistro; agora: number }) {
+  if (p.status === "aceita") {
+    return (
+      <span className="selo border-ok/60 text-ok">
+        Aceita{p.accepted_at ? ` em ${diaCurto(p.accepted_at, agora)}` : ""}
+      </span>
+    );
+  }
+  if (p.status === "recusada") return <span className="selo border-erro/60 text-erro">Recusada</span>;
+  if (p.sent_at) return <span className="selo border-cobre/60 text-cobre-claro">Enviada em {diaCurto(p.sent_at, agora)}</span>;
+  return <span className="selo">{ROTULO_STATUS_PROPOSTA[p.status] ?? "Gerada"}</span>;
 }
 
 export function Propostas({
@@ -70,7 +88,7 @@ export function Propostas({
   aoMudar,
 }: {
   oportunidade: Oportunidade;
-  /** Conversa do WhatsApp: de onde a IA lê as mensagens e por onde o link é enviado. */
+  /** Conversa do WhatsApp: por onde o link é enviado. */
   atendimentoId: string | null;
   compacto?: boolean;
   /** Chamado depois que uma sugestão foi aceita (para a tela recarregar). */
@@ -80,8 +98,6 @@ export function Propostas({
   const [lista, setLista] = useState<PropostaRegistro[] | null>(null);
   const [erroLista, setErroLista] = useState<string | null>(null);
   const [avisoDeMigracao, setAvisoDeMigracao] = useState<string | null>(null);
-  const [montando, setMontando] = useState<"ia" | "sem_ia" | null>(null);
-  const [erroRascunho, setErroRascunho] = useState<string | null>(null);
   const [abertura, setAbertura] = useState<AberturaDoEditor | null>(null);
   const [temLocal, setTemLocal] = useState(() => lerRascunhoLocal(oportunidade.id) !== null);
   const [envio, setEnvio] = useState<PropostaRegistro | null>(null);
@@ -125,23 +141,6 @@ export function Propostas({
     };
   }, [oportunidade.id]);
 
-  async function montar(semIA: boolean) {
-    setMontando(semIA ? "sem_ia" : "ia");
-    setErroRascunho(null);
-    const r = await pedirRascunho({ oportunidadeId: oportunidade.id, atendimentoId, semIA });
-    setMontando(null);
-    if (!r.ok) {
-      setErroRascunho(r.erro);
-      return;
-    }
-    setAbertura({
-      original: r.rascunho,
-      estado: paraEditor(r.rascunho.proposta, r.rascunho.fontesDosValores),
-      editados: [],
-      vindoDe: semIA ? "sem_ia" : "ia",
-    });
-  }
-
   function continuar() {
     const local = lerRascunhoLocal(oportunidade.id);
     if (!local) {
@@ -158,8 +157,9 @@ export function Propostas({
   }
 
   function novaVersao(p: PropostaRegistro) {
+    if (ehPremium(p.content)) return;
     setAbertura({
-      original: rascunhoDoHistorico(p),
+      original: rascunhoDoHistorico(p, p.content),
       estado: paraEditor(p.content),
       editados: [],
       vindoDe: "historico",
@@ -206,14 +206,13 @@ export function Propostas({
 
   const maisRecente = lista?.[0] ?? null;
   const sugestoes = sugestoesAposProposta(oportunidade, maisRecente?.created_at, agora);
-  const ocupado = montando !== null;
 
   return (
     <div className="space-y-3">
       {!compacto && (
         <p className="text-xs leading-relaxed text-apoio">
-          A IA monta o rascunho com a conversa, os dados da oportunidade e a base de conhecimento. Você revisa, edita e
-          gera o PDF. Nada é enviado ao cliente sem o seu clique.
+          A proposta nasce de um formulário curto: a IA escreve a apresentação com os valores da tabela de preços, você
+          revisa no editor e decide se envia. Nada é enviado ao cliente sem o seu clique.
         </p>
       )}
 
@@ -224,44 +223,29 @@ export function Propostas({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
+        <Link
+          href={`/propostas/nova?oportunidade=${oportunidade.id}`}
           className={`botao botao-primario ${compacto ? "w-full py-1.5 text-xs" : "w-full sm:w-auto"}`}
-          onClick={() => montar(false)}
-          disabled={ocupado}
         >
-          {montando === "ia" ? "A IA está montando o rascunho…" : "Montar proposta"}
-        </button>
+          Nova proposta
+        </Link>
         {temLocal && (
           <button
             type="button"
             className={`botao botao-secundario ${compacto ? "w-full py-1.5 text-xs" : "w-full sm:w-auto"}`}
             onClick={continuar}
-            disabled={ocupado}
           >
-            Continuar rascunho
+            Continuar rascunho em PDF
           </button>
         )}
       </div>
-      {montando === "ia" && (
-        <p className="text-xs text-apoio">Lendo a conversa e os documentos. Costuma levar de 10 a 40 segundos.</p>
-      )}
-      {temLocal && !ocupado && (
+      {temLocal && (
         <p className="text-[11px] text-apoio/80">
-          Há um rascunho guardado neste aparelho.{" "}
+          Há um rascunho de proposta em PDF guardado neste aparelho.{" "}
           <button type="button" className="underline hover:text-texto" onClick={descartarLocal}>
             Descartar
           </button>
         </p>
-      )}
-
-      {erroRascunho && (
-        <div className="space-y-2 rounded-lg border border-erro/50 bg-erro/10 px-3 py-2 text-xs text-erro" role="alert">
-          <p>{erroRascunho}</p>
-          <button type="button" className="botao botao-secundario py-1 text-xs" onClick={() => montar(true)} disabled={ocupado}>
-            {montando === "sem_ia" ? "Abrindo…" : "Montar sem a IA"}
-          </button>
-        </div>
       )}
 
       {aviso && (
@@ -311,12 +295,11 @@ export function Propostas({
             {lista.map((p) => (
               <li key={p.id} className="rounded-lg border border-borda bg-superficie-2 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                  <span className="text-sm font-semibold tracking-wide">{p.number}</span>
-                  {p.sent_at ? (
-                    <span className="selo border-ok/60 text-ok">Link enviado em {diaCurto(p.sent_at, agora)}</span>
-                  ) : (
-                    <span className="selo">Ainda não enviada</span>
-                  )}
+                  <span className="text-sm font-semibold tracking-wide">
+                    {p.number}
+                    {p.kind === "premium" ? "" : <span className="ml-1.5 text-[10px] font-normal text-apoio">PDF</span>}
+                  </span>
+                  <SeloSituacao p={p} agora={agora} />
                 </div>
                 <p className="mt-0.5 break-words text-xs">{p.title}</p>
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
@@ -328,16 +311,31 @@ export function Propostas({
                   <dd>{nomeDe(p.created_by) || "equipe"}</dd>
                   <dt className="text-apoio">Válida até</dt>
                   <dd>{diaPorExtenso(p.valid_until)}</dd>
+                  {p.kind === "premium" && (
+                    <>
+                      <dt className="text-apoio">Visualizações</dt>
+                      <dd>
+                        {p.views}
+                        {p.last_viewed_at ? ` · última ${diaCurto(p.last_viewed_at, agora)}` : ""}
+                      </dd>
+                    </>
+                  )}
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <a
-                    href={`/api/propostas/${p.id}/arquivo`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="botao botao-secundario flex-1 py-1.5 text-xs sm:flex-none"
-                  >
-                    Baixar
-                  </a>
+                  {p.kind === "premium" ? (
+                    <Link href={`/propostas/${p.id}`} className="botao botao-secundario flex-1 py-1.5 text-xs sm:flex-none">
+                      Abrir
+                    </Link>
+                  ) : (
+                    <a
+                      href={`/api/propostas/${p.id}/arquivo`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="botao botao-secundario flex-1 py-1.5 text-xs sm:flex-none"
+                    >
+                      Baixar
+                    </a>
+                  )}
                   <button
                     type="button"
                     className="botao botao-primario flex-1 py-1.5 text-xs sm:flex-none"
@@ -347,18 +345,19 @@ export function Propostas({
                   >
                     Enviar pelo WhatsApp
                   </button>
-                  <button
-                    type="button"
-                    className="botao botao-secundario w-full py-1.5 text-xs sm:w-auto"
-                    onClick={() => novaVersao(p)}
-                    disabled={ocupado}
-                  >
-                    Editar e gerar nova versão
-                  </button>
+                  {p.kind !== "premium" && (
+                    <button
+                      type="button"
+                      className="botao botao-secundario w-full py-1.5 text-xs sm:w-auto"
+                      onClick={() => novaVersao(p)}
+                    >
+                      Editar e gerar nova versão
+                    </button>
+                  )}
                 </div>
                 {!atendimentoId && (
                   <p className="mt-2 text-[11px] text-apoio/80">
-                    Sem conversa no WhatsApp ligada a esta oportunidade: baixe o PDF e envie por outro canal.
+                    Sem conversa no WhatsApp ligada a esta oportunidade: copie o link na proposta e envie por outro canal.
                   </p>
                 )}
               </li>
@@ -396,7 +395,7 @@ export function Propostas({
 
 // ------------------------------------------------------ enviar pelo WhatsApp
 
-function EnvioDaProposta({
+export function EnvioDaProposta({
   proposta,
   atendimentoId,
   aoFechar,
@@ -411,6 +410,7 @@ function EnvioDaProposta({
   const [texto, setTexto] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const premium = proposta.kind === "premium";
 
   useEffect(() => {
     let ativo = true;
@@ -447,8 +447,9 @@ function EnvioDaProposta({
     <Dialogo titulo={`Enviar a proposta ${proposta.number}`} aoFechar={aoFechar}>
       <div className="space-y-3">
         <p className="text-xs leading-relaxed text-apoio">
-          O cliente recebe uma mensagem de texto com o link do PDF. O link vale por 7 dias. Edite o texto à vontade,
-          mantendo o link.
+          {premium
+            ? `O cliente recebe uma mensagem com o link da apresentação. O link vale por ${proposta.public_days} dias e pode ser renovado. Edite o texto à vontade, mantendo o link.`
+            : "O cliente recebe uma mensagem de texto com o link do PDF. O link vale por 7 dias. Edite o texto à vontade, mantendo o link."}
         </p>
         {link === null && !erro && <p className="text-sm text-apoio">Preparando o link…</p>}
         {link !== null && (

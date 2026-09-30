@@ -1,0 +1,696 @@
+[
+  {
+    "fatia": "Itens 1 e 9 (parte de migração/docs): tabela de preços ar1_price_items (src/lib/precos/*, scripts/precos-iniciais.mjs, TabelaDePrecos.tsx, Configuracoes.tsx) e a migração E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\supabase\\migrations\\20260930110000_ar1_propostas_premium.sql, conferida contra o que o servidor usa. Evidência: apliquei as 7 migrações, em ordem, num Postgres em memória (PGlite, no scratchpad, com auth/storage/realtime simulados). Todas passaram. Depois testei RLS, grants, checks e os dados iniciais. Também comparei o seed .mjs com o INSERT do SQL por script e rodei o eslint nos arquivos da fatia (sem erro nem aviso). Não editei nada do projeto e não toquei no banco real.",
+    "pronto": [
+      "Migração 20260930110000 é transacional, no estilo das anteriores, e aplica sem erro sobre 20260930100000 (testado em PGlite): cria ar1_price_items com todas as colunas da especificação (service, name, description, unit, price numeric(12,2), min_qty, includes jsonb array, active, confirmed, sort_order, updated_by FK ar1_staff, created_at/updated_at + trigger touch_updated_at).",
+      "RLS de ar1_price_items: equipe ativa lê e grava (política FOR ALL com is_staff). Funcionário inativo vê 0 linhas; anon recebe 'permission denied'. Os grants seguem o padrão: REVOKE de PUBLIC/anon, CRUD para authenticated, ALL para service_role.",
+      "Checks de ar1_price_items conferidos na prática: serviço fora da lista, unidade fora da lista, preço negativo e includes que não é array são recusados. As listas de serviços (13) e unidades (6) do SQL são idênticas, byte a byte e em NFC, às de src/lib/precos/precos.ts (SERVICOS/UNIDADES). Os limites batem com o banco: nome 120, descrição 600, min_qty 1..1000, VALOR_MAXIMO 9.999.999.999,99.",
+      "Dados iniciais: 31 itens cobrindo os 13 serviços, todos com confirmed=false e active=true, ids fixos 10000000-0000-4000-8000-0000000000NN. scripts/precos-iniciais.mjs bate campo a campo com o INSERT do SQL (0 diferenças).",
+      "Colunas novas de ar1_proposals (kind, status, service, public_token UNIQUE 32..128, public_days, public_expires_at, views, first/last_viewed_at, accepted_at/name, decided_at/by, unconfirmed_prices, pdf_engine, pdf_error, updated_at + trigger) existem e batem com PropostaRegistro em tipos.ts, com normalizar() em registro.ts e com todos os insert/update de premium/servidor.ts e registro.ts. file_path passou a aceitar NULL, e vários rascunhos sem PDF convivem com o UNIQUE (testado). pages foi para 1..60: o nome da constraint antiga ar1_proposals_pages_check confere. Status inválido é recusado. Propostas antigas com sent_at viram 'enviada'.",
+      "O bucket ar1-context passa a aceitar png/jpeg/webp e mantém os 5 tipos anteriores (conferido após aplicar). O envio é feito pela chave de serviço, então não precisa de política nova em storage.objects; a leitura continua só para a equipe.",
+      "src/lib/precos/dados.ts (navegador, sessão da equipe) tem buscar/criar/alterar/remover item e detecta a falta de migração (42P01/PGRST205) com aviso. src/lib/precos/servidor.ts tem lerTabelaDePrecos() com chave de serviço, que dá erro 503 com falta_migracao.",
+      "TabelaDePrecos.tsx cumpre a tela do item 1: lista por serviço na ordem do catálogo, edição em linha com validação, Confirmar, Ativar/Desativar, adicionar por serviço, remover com confirmação, filtro 'mostrar inativos', selos 'Valor sugerido, confirmar'/'Confirmado'/'Inativo' e o aviso exato 'Valores iniciais sugeridos. Confirme cada item antes de usar em propostas.' com a contagem. O layout é mobile-first (grid 1 coluna no celular) e o eslint passa sem nada.",
+      "Configuracoes.tsx inclui a SecaoTabelaDePrecos em Ajustes (/configuracoes); só admin edita, no mesmo padrão das outras seções.",
+      "investimento.ts (puro) aplica a regra de valores do item 4: o unitário sempre vem da tabela, a quantidade é elevada à mínima, item inexistente ou inativo vira 'sob consulta' com valores null, item não confirmado marca nao_confirmado, o desconto fica limitado ao subtotal e total = subtotal - desconto. criarPropostaPremium e alterarPropostaPremium gravam total, pending_items e unconfirmed_prices a partir desse recálculo. A IA só recebe itens ativos."
+    ],
+    "lacunas": [
+      {
+        "item": "Nenhum teste vitest do item 9 existe",
+        "dono": "backend",
+        "detalhe": "tests/ tem só os 16 arquivos antigos. Faltam os testes de: recálculo de totais pela tabela, aviso de não confirmado, sob consulta, token e validade, contagem de visualizações, aceite, seleção de imagens por tag e 'puxar da conversa' com IA simulada. O comentário de scripts/precos-iniciais.mjs cita tests/precos.test.ts ('confere que os dois arquivos batem'), mas esse arquivo não existe. Sugestão: tests/precos.test.ts deve comparar PRECOS_INICIAIS com o INSERT do SQL (o parse por regex que usei deu 0 diferenças), testar validarItem/normalizarItem/agruparPorServico e ter um tests/propostas-premium.test.ts para investimento/publico/galeria/prompt.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\tests",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\scripts\\precos-iniciais.mjs"
+        ]
+      },
+      {
+        "item": "LEIA-ME.md e .env.example não foram atualizados",
+        "dono": "migracao-docs",
+        "detalhe": "Nenhum dos dois aparece no git status. Falta documentar: AI_MODEL_PROPOSTAS (padrão anthropic/claude-opus-5.5, ou claude-opus-5-5 com AI_PROVIDER=anthropic), CHROMIUM_PACK_URL (padrão .../v153.0.0/chromium-v153.0.0-pack.x64.tar, ligado a @sparticuz/chromium-min ^153), CHROME (Chrome/Edge local para o PDF fora da Vercel), a migração 20260930110000 na seção 'Banco de dados' (ao lado da linha 87), a tabela de preços em Ajustes, a aba Propostas, a página /p/<token> e o PDF com reserva. O comentário do .env.example na linha 67 ainda diz que as propostas só precisam da 20260930100000.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\LEIA-ME.md",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\.env.example"
+        ]
+      },
+      {
+        "item": "Simulador sem ar1_price_items e sem as colunas premium",
+        "dono": "backend",
+        "detalhe": "scripts/simular-supabase.mjs responde PGRST205 para tabela desconhecida. Com o simulador, a tela Ajustes > Tabela de preços mostra só 'falta aplicar a migração' e /api/propostas/premium dá 503, o que impede as capturas exigidas pela barra de qualidade (§7). Incluir ar1_price_items importando PRECOS_INICIAIS de ./precos-iniciais.mjs (com alguns confirmed=true, para mostrar os dois selos) e acrescentar às propostas simuladas as colunas novas e ao menos uma proposta kind='premium' com public_token.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\scripts\\simular-supabase.mjs"
+        ]
+      },
+      {
+        "item": "Situação 'rascunho' nunca é gravada",
+        "dono": "backend",
+        "detalhe": "A migração aceita 'rascunho', mas criarPropostaPremium já insere 'gerada' e não há caminho que grave um rascunho. Pela especificação, a lista filtra por rascunho|gerada|enviada|aceita|recusada. É preciso decidir: ou gravar 'rascunho' até o 1º 'Gerar PDF'/'Link', ou tirar o filtro da tela.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts"
+        ]
+      },
+      {
+        "item": "Menu aponta para /propostas, mas a rota não existe",
+        "dono": "telas",
+        "detalhe": "Shell.tsx já mostra 'Propostas' entre Funil e Retomar, mas src/app/(app)/propostas/ (lista, nova e [id]) não existe: publicar assim dá 404 no menu. Fora da minha fatia; registro porque bloqueia a publicação.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\Shell.tsx"
+        ]
+      }
+    ],
+    "defeitos": [
+      {
+        "gravidade": "alta",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+        "problema": "Cliente digitado sem telefone derruba a criação da proposta. validarEntrada (pedido.ts) aceita telefone vazio, como pede a especificação ('contato se houver telefone'). Mas resolverBase insere ar1_quote_requests com phone: c.telefone || contato?.phone || '' (linha 169), e a coluna é phone NOT NULL CHECK (char_length(btrim(phone)) BETWEEN 8 AND 32) desde a migração foundation. Confirmei no PGlite: o insert é recusado pela constraint ar1_quote_requests_phone_check, e o usuário recebe 500 'Não foi possível criar a oportunidade'. Isso bloqueia o caso 'cliente que não veio pelo WhatsApp'. Correção: ou (a) o passo 1 exige telefone quando não há contact_id/oportunidade_id (mudança só no backend e nas telas), ou (b) a migração 20260930110000 afrouxa a coluna (DROP NOT NULL + troca do CHECK por 'phone IS NULL OR ...'), o que exige revisar Oportunidade.phone:string no funil.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+        "problema": "Salvar qualquer edição recalcula o investimento com a tabela ATUAL, mesmo em proposta enviada ou aceita. alterarPropostaPremium sempre refaz a conta quando chega conteudo e não barra status aceita/recusada. Assim, trocar só o título de uma proposta aceita muda os valores se alguém mexeu na tabela depois, e o item desativado ou removido depois do envio vira 'sob consulta' e some do total. Isso contradiz o comentário de precos/servidor.ts ('ativos e inativos, para o recálculo respeitar o que a proposta já usa') e o aviso da tela de preços ao remover/desativar ('Propostas já geradas não mudam'). Sugestão: bloquear a edição de conteúdo em aceita/recusada e, nas linhas que já existiam, aceitar item inativo com o preço da tabela (ou manter o valor unitário já gravado).",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\supabase\\migrations\\20260930110000_ar1_propostas_premium.sql",
+        "problema": "A tela diz 'Só administradores alteram a tabela' (podeEditar = role admin), mas a política ar1_price_items_staff libera INSERT/UPDATE/DELETE para qualquer funcionário ativo. ar1_settings, o precedente de configuração, usa leitura para a equipe e escrita para admin (ar1_settings_admin_write). A especificação pede só 'RLS equipe', então não é violação, mas a promessa da tela não é garantida no banco. Opção: SELECT com is_staff() e escrita com is_admin().",
+        "dono": "migracao-docs"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\supabase\\migrations\\20260930110000_ar1_propostas_premium.sql",
+        "problema": "Índice redundante: public_token text UNIQUE já cria ar1_proposals_public_token_key, e ar1_proposals_token_idx (parcial, WHERE public_token IS NOT NULL) duplica a mesma busca. Os dois aparecem em pg_indexes no teste. É só custo de escrita; pode sair.",
+        "dono": "migracao-docs"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+        "problema": "A contagem de visualizações lê e depois grava (registrarVisita usa p.views + 1 calculado na leitura), então duas visitas simultâneas contam uma só. Para contar certo, falta uma função SQL atômica (por exemplo ar1_private/public registrar_visita(token) com views = views + 1 e coalesce(first_viewed_at, now())) chamada por rpc com a chave de serviço, a ser criada na migração.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\TabelaDePrecos.tsx",
+        "problema": "Ao editar o preço de um item sugerido, ele continua 'Valor sugerido, confirmar': a pessoa corrige para o valor real, esquece o botão Confirmar e as propostas seguem com o aviso interno. Também não há como voltar um item para 'não confirmado'. Sugestão: botão 'Salvar e confirmar' no formulário ou uma caixa 'valor confirmado'.",
+        "dono": "telas"
+      }
+    ],
+    "contratos_de_api": "TABELA DE PREÇOS (não tem rota /api; o navegador fala direto com o Supabase, e o RLS libera a equipe):\n- src/lib/precos/dados.ts (\"use client\"):\n  - buscarItensDePreco(): Promise<{ok:true, itens: ItemDePreco[]} | {ok:false, erro, faltaMigracao?}>. Traz todos os itens, inclusive inativos, até 500. Para linha nova no editor, filtrar active.\n  - criarItemDePreco(campos: CamposDoItem, usuarioId): {ok, item}. Grava active=true, confirmed=false, sort_order=9999.\n  - alterarItemDePreco(id, Partial<CamposDoItem> & Partial<{active, confirmed, sort_order}>, usuarioId): {ok, item}.\n  - removerItemDePreco(id): {ok}.\n- src/lib/precos/precos.ts (puro):\n  - SERVICOS (13) e UNIDADES (6).\n  - ItemDePreco {id, service, name, description|null, unit, price:number, min_qty, includes:string[], active, confirmed, sort_order, updated_by, created_at, updated_at}.\n  - CamposDoItem = {service, name, description, unit, price, min_qty, includes}.\n  - validarItem(ItemNoFormulario{todos string; includes = uma linha por item}) -> {ok:true, campos} | {ok:false, erros por campo}.\n  - Auxiliares: paraFormulario, itemVazio(servico), agruparPorServico, reais, precoComUnidade, normalizarItem, AVISO_VALORES_INICIAIS, ehServico/ehUnidade.\n- src/lib/precos/limites.ts: TABELA_PRECOS, AVISO_FALTA_MIGRACAO_PRECOS.\n- Servidor (server-only): lerTabelaDePrecos() em src/lib/precos/servidor.ts. Usa a chave de serviço e traz todos os itens; lança ErroProposta 503 com faltaMigracao.\n\nINVESTIMENTO (puro, src/lib/propostas/premium/investimento.ts; o editor pode usar no navegador para a prévia, e o servidor refaz a conta no PATCH):\n- recalcularInvestimento(linhas: {descricao?, quantidade?, unidade?, price_item_id?}[], tabela: ItemDaTabela[], {desconto?: number|null, condicoesPagamento?: string}) -> Investimento.\n  - Investimento = {itens: [{descricao, quantidade, unidade, valor_unitario|null, valor_total|null, price_item_id|null, nao_confirmado}], subtotal, desconto|null, total, condicoes_pagamento, sob_consulta}.\n  - Limites: MAXIMO_DE_ITENS 20, QUANTIDADE_MAXIMA 1000.\n- Auxiliares: usaValoresNaoConfirmados(inv), AVISO_NAO_CONFIRMADO (só interno), textoDoTotalPremium, quantidadeLegivel, reaisPremium, TEXTO_SOB_CONSULTA.\n\nROTAS (todas exigem sessão da equipe, menos /api/p. Erro no formato {ok:false, erro, falta_migracao?:true}):\n- GET /api/propostas?busca=&situacao=rascunho|gerada|enviada|aceita|recusada -> {ok, propostas: PropostaRegistro[]}. Máximo 300, mais novas primeiro; a busca olha number, título, serviço, cliente.nome e empresa.\n- GET /api/propostas?oportunidade=<uuid> -> {ok, propostas}: histórico da oportunidade.\n- POST /api/propostas/premium: cria a proposta com a IA e grava status 'gerada'.\n  - Corpo: {cliente:{contact_id?, oportunidade_id?, nome*, empresa, telefone, email, cidade}, pedido:{servico*, servicos_adicionais[] (até 6), descricao (ou quantidades)*, data_periodo, local, publico_objetivo, quantidades, observacoes}, dias_link? 1..365 (padrão 30), sem_ia?: true}.\n  - Resposta: {ok, proposta, pendencias[], avisos[], modelo}. Se a validação falhar: 400 {erros:{campo:msg}, passo:1|2}. ATENÇÃO: hoje, sem telefone e sem contato, dá 500 (defeito alto).\n- POST /api/propostas/premium/puxar: não grava nada.\n  - Corpo: {contact_id}.\n  - Resposta: {ok, pedido: Pedido, cliente:{cidade, empresa, email}, modelo}. 404 se não houver mensagens.\n- GET /api/propostas/[id] -> {ok, proposta, imagens: {caminho_no_bucket: url_assinada_24h}}.\n- PATCH /api/propostas/[id]: devolve {ok, proposta, imagens}.\n  - conteudo? PropostaPremium inteiro: investimento.itens só com price_item_id + quantidade (+ descricao/unidade para linha sob consulta), mais investimento.desconto (R$) e investimento.condicoes_pagamento. O servidor recalcula e grava total, pending_items, unconfirmed_prices e valid_until.\n  - dias_link?: renova public_expires_at.\n  - situacao?: 'aceita' | 'recusada' (qualquer uma, menos rascunho) ou 'gerada' (desfaz aceita/recusada/enviada). 'enviada' não entra por aqui.\n- POST /api/propostas/[id]/pdf -> {ok, proposta}. Preenche file_path, pages, pdf_engine 'chrome'|'pdf-lib' e pdf_error com o motivo da reserva. maxDuration 60.\n- POST /api/propostas/[id]/link -> {ok, link: APP_URL/p/<token>, texto (mensagem pronta), expira_em, dias}. Renova o token vencido e não envia nada.\n- POST /api/propostas/[id]/imagem: multipart com o campo 'arquivo' (png/jpg/webp, até 4 MB) -> {ok, caminho: 'propostas/<id>/<uuid>-nome.ext', url}. No PATCH, só valem caminhos de propostas/<id>/.\n- GET /api/propostas/[id]/arquivo -> 302 para o PDF assinado (10 min); 404 se ainda não houver PDF.\n- POST /api/whatsapp/enviar: marca a proposta como enviada (sent_at e status 'enviada' se estava rascunho/gerada).\n  - Corpo: {atendimento_id (UUID obrigatório), text (até 5000), proposal_id}.\n  - Sem conversa, isto é, cliente só digitado sem atendimento, não dá para enviar pelo WhatsApp; só copiar o link.\n- POST /api/p/[token]/aceitar (público): corpo {nome (2+ caracteres)} -> {ok, nome} | {ok:false, erro}. Códigos: 410 link inativo, 409 já aceita/encerrada, 400 sem nome, 404 token não encontrado.\n- Antigas, para o fluxo em PDF simples: POST /api/propostas e /api/propostas/rascunho.\n\nCOLUNAS QUE A TELA RECEBE (PropostaRegistro em tipos.ts, COLUNAS='*'):\n- id, quote_request_id, contact_id, atendimento_id, number, title, content, sources, total|null, pending_items, valid_until, file_path|null, file_size, pages, model, created_by, created_at, sent_at, sent_by, outbox_id.\n- Novas: kind 'pdf'|'premium', status, service, public_token, public_days, public_expires_at, views, first_viewed_at, last_viewed_at, accepted_at, accepted_name, decided_at, decided_by, unconfirmed_prices, pdf_engine, pdf_error, updated_at.\n- unconfirmed_prices e pdf_error são só internos; nunca mostrar ao cliente."
+  },
+  {
+    "fatia": "Itens 2, 3 (passos 1 a 4 na interface) e 8 da aba Propostas premium: telas do painel (src/app/(app)/propostas/*, editor, lista, menu no Shell.tsx, botão na oportunidade em Propostas.tsx), contratos de API que as telas vão usar e o erro de lint. Auditoria só de leitura em E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento, feita às 23h42 de 29/09. Resultados: npx eslint deu 1 erro e 3 avisos (2 dos avisos são na ponte, que não deve ser tocada); npx tsc --noEmit --incremental false passou sem erros; vitest passou 391 de 391. O next build não foi rodado, para não mexer na pasta .next que outros fluxos usam. Os arquivos continuaram iguais durante a auditoria. NovaProposta.tsx existe (gravado às 23h32), embora a tarefa dissesse que ainda faltava.",
+    "pronto": [
+      "Menu (E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\Shell.tsx): o item Propostas fica entre Funil e Retomar, na barra lateral e na barra de baixo do celular, com ícone próprio sem clichê. O item fica marcado também em /propostas/nova e /propostas/<id>, porque a regra é pathname.startsWith.",
+      "Lista (E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\ListaPropostas.tsx): mostra número (com a marca PDF nas antigas), selo de situação, título, cliente e empresa, serviço, total (premium ou PDF), data, quem fez e visualizações. Tem busca por número, cliente, empresa ou serviço, filtro de situação com contagem e botão '+ Nova proposta'. Mostra aviso quando falta a migração e quando a lista está vazia. As premium abrem /propostas/<id>; as em PDF abrem /funil/<oportunidade>. O componente está pronto, mas nenhuma rota o monta.",
+      "Nova proposta, passos 1 a 3 (E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\NovaProposta.tsx). Passo 1: busca de contato do WhatsApp por nome, empresa ou telefone, ou digitação de nome, empresa, telefone, e-mail e cidade, com erros por campo. Passo 2: serviço principal (da lista SERVICOS), até 6 adicionais, descrição, data ou período, local, público e objetivo, quantidades, observações e o botão 'Puxar da conversa' quando há contato. Passo 3: resumo, validade do link (padrão 30 dias) e os botões 'Gerar proposta com a IA' e 'Criar em branco (sem IA)'. Aceita ?oportunidade=<id> e ?contato=<id> para chegar preenchida. Ao gerar, grava {pendencias, avisos} no sessionStorage 'ar1.proposta.avisos.<id>' e manda para /propostas/<id>?nova=1. Também está pronto e sem rota.",
+      "Item 8 (E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\Propostas.tsx): o botão da oportunidade (tela do funil e também dentro da conversa, no modo compacto) virou um link para /propostas/nova?oportunidade=<id>, com o rótulo 'Nova proposta'. O histórico continua na oportunidade e lista premium e PDF, com o selo de situação (SeloSituacao), visualizações, 'Abrir' nas premium e 'Enviar pelo WhatsApp' com o link da apresentação. As antigas em PDF mantêm 'Baixar' e 'Editar e gerar nova versão'. SeloSituacao, totalDoRegistro e EnvioDaProposta foram exportados para reaproveitar.",
+      "Funções do navegador para as telas premium já existem em E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\dados.ts: buscarTodasAsPropostas, lerPropostaPremium, criarPropostaPremium, puxarPedidoDaConversa, salvarConteudoPremium, mudarSituacaoDaProposta, mudarDiasDoLink, gerarPdfPremium, enviarImagemDaProposta, pedirLink e enviarLink.",
+      "Todas as rotas de API que o editor precisa existem e exigem sessão da equipe: GET/PATCH /api/propostas/[id], POST /api/propostas/premium, POST /api/propostas/premium/puxar, POST /api/propostas/[id]/pdf, POST /api/propostas/[id]/imagem, POST /api/propostas/[id]/link, GET /api/propostas/[id]/arquivo e GET /api/propostas (lista geral).",
+      "Prévia pronta para o editor: ApresentacaoPremium (E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\ApresentacaoPremium.tsx) não usa hooks e tem modo 'previa' (lâminas 16:9, classe .ap--previa). Pode ser usada dentro de um componente do navegador.",
+      "Funções puras que o editor pode usar: recalcularInvestimento e usaValoresNaoConfirmados em premium/investimento.ts; normalizarPremium, conferirPremium, ORDEM_PADRAO e ROTULO_SECAO em premium/conteudo.ts; GALERIA, TAGS_DA_GALERIA e escolherImagens em galeria.ts; podeMarcar e estadoDoLink em premium/publico.ts. A tabela de preços é lida no navegador com buscarItensDePreco() de src/lib/precos/dados.ts.",
+      "O proxy deixa /p/ livre, sem login, e continua protegendo /propostas."
+    ],
+    "lacunas": [
+      {
+        "item": "Faltam as três páginas da aba",
+        "dono": "telas",
+        "detalhe": "A pasta src/app/(app)/propostas/ não existe, então /propostas, /propostas/nova e /propostas/<id> dão 404. Hoje o botão 'Nova proposta' da oportunidade, o 'Abrir' do histórico, o '+ Nova proposta' da lista e o redirecionamento depois de gerar levam todos a 404. Criar: (1) propostas/page.tsx com metadata {title:'Propostas'} renderizando <ListaPropostas/>; (2) propostas/nova/page.tsx com <Suspense><NovaProposta/></Suspense>, porque NovaProposta usa useSearchParams; (3) propostas/[id]/page.tsx no padrão de funil/[id]/page.tsx (checar UUID, notFound(), PageProps<'/propostas/[id]'>) renderizando o editor premium.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\app\\(app)\\propostas\\page.tsx",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\app\\(app)\\propostas\\nova\\page.tsx",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\app\\(app)\\propostas\\[id]\\page.tsx"
+        ]
+      },
+      {
+        "item": "Editor visual da proposta premium com prévia (passo 4) não existe",
+        "dono": "telas",
+        "detalhe": "Nenhum componente chama salvarConteudoPremium, gerarPdfPremium, enviarImagemDaProposta, mudarSituacaoDaProposta ou mudarDiasDoLink. Falta um componente (sugestão: EditorPremium.tsx). Carregamento: lerPropostaPremium(id) devolve {proposta, imagens}; se kind !== 'premium', mandar para /funil/<quote_request_id>. Campos a editar: titulo, subtitulo, cliente.nome/empresa, capa.frase, capa.imagem, logo_cliente, entendimento, por_que_ar1 (até 3), solucao[] {titulo, descricao, imagem}, escopo_detalhado[] {item, descricao, quantidade, unidade}, entregas[], cronograma[] {etapa, prazo}, proximos_passos[], validade_dias e observacoes, respeitando LIMITES_PREMIUM. Reordenar ordem_secoes, com a capa sempre primeiro. Investimento: escolher o item da tabela (buscarItensDePreco, só os ativos, agrupados por serviço) ou uma linha 'sob consulta' (price_item_id null), mais quantidade, desconto em R$ e condições. Recalcular na hora com recalcularInvestimento(linhas, tabela, {desconto, condicoesPagamento}); o servidor recalcula de novo ao salvar. Imagens: seletor da GALERIA com filtro por tag (urlDaGaleria) e envio de arquivo por enviarImagemDaProposta, que devolve {caminho, url}. Usar {origem:'cliente', arquivo: caminho} e juntar a url ao mapa `imagens` da prévia. Prévia: <ApresentacaoPremium dados={{conteudo, numero: proposta.number, emitidaEm: created_at.slice(0,10), validaAte: valid_until, imagens}} modo='previa' acoes={null}/>, ao lado no desktop (1440) e abaixo no celular (390). Botões: Salvar; Gerar PDF (salvar antes, porque o PDF imprime o que está gravado) e depois Baixar em /api/propostas/<id>/arquivo; Link para o cliente (pedirLink, com copiar e abrir); validade do link (mudarDiasDoLink); Enviar pelo WhatsApp (EnvioDaProposta com atendimentoId = proposta.atendimento_id, desligado quando for null); Marcar como aceita/recusada e desfazer (mudarSituacaoDaProposta, seguindo podeMarcar). Mostrar também visualizações, primeira e última visita, aceite (accepted_name/accepted_at), link para a oportunidade e o motivo pdf_error quando pdf_engine='pdf-lib'.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\ApresentacaoPremium.tsx",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\dados.ts",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\investimento.ts",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\conteudo.ts",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\galeria.ts"
+        ]
+      },
+      {
+        "item": "Avisos internos no editor e no envio",
+        "dono": "telas",
+        "detalhe": "O editor precisa mostrar só para a equipe: AVISO_NAO_CONFIRMADO quando proposta.unconfirmed_prices (ou quando algum item tem nao_confirmado), quantas linhas estão 'sob consulta', as pendencias e avisos lidos de sessionStorage 'ar1.proposta.avisos.<id>' quando vier ?nova=1 (apagar depois de ler) e pdf_error. Hoje EnvioDaProposta, o histórico da oportunidade e a lista não avisam que a proposta usa valores não confirmados antes de enviar.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\Propostas.tsx",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\ListaPropostas.tsx"
+        ]
+      },
+      {
+        "item": "Pendências da IA não ficam gravadas",
+        "dono": "backend",
+        "detalhe": "criarPropostaPremium devolve pendencias e avisos só na resposta. NovaProposta guarda isso apenas no sessionStorage, então tudo some ao recarregar a página ou abrir em outro aparelho. Gravar numa coluna interna (por exemplo ai_notes ou pendencias jsonb em ar1_proposals), fora de content, porque content vai para a página do cliente. Isso pede uma linha na migração.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\supabase\\migrations\\20260930110000_ar1_propostas_premium.sql"
+        ]
+      },
+      {
+        "item": "PDF premium sem botão de baixar no histórico da oportunidade",
+        "dono": "telas",
+        "detalhe": "Em Propostas.tsx, as propostas premium só têm o botão 'Abrir', mesmo com file_path preenchido. A especificação pede que o PDF apareça no histórico. Acrescentar 'Baixar PDF' (/api/propostas/<id>/arquivo) quando p.file_path existir.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\Propostas.tsx"
+        ]
+      },
+      {
+        "item": "Capturas de tela e dados simulados das telas novas",
+        "dono": "backend",
+        "detalhe": "scripts/simular-supabase.mjs não tem ar1_price_items nem propostas premium (kind, status, public_token etc.), então não dá para tirar as capturas pedidas na barra de qualidade (desktop 1440 e celular 390). Semear o simulador com PRECOS_INICIAIS de scripts/precos-iniciais.mjs e 2 ou 3 propostas premium. Na parte das telas, scripts/capturar-telas.mjs precisa de cenários novos para /propostas, /propostas/nova (os 3 passos), o editor e /p/<token>.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\scripts\\simular-supabase.mjs",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\scripts\\capturar-telas.mjs"
+        ]
+      },
+      {
+        "item": "Situação 'rascunho' nunca aparece",
+        "dono": "backend",
+        "detalhe": "Toda proposta é criada como 'gerada', inclusive a 'Criar em branco (sem IA)'. Por isso o filtro da lista sempre mostra 'Rascunho (0)', e podeMarcar não deixa sair de rascunho. Decidir entre usar 'rascunho' para a proposta em branco (passando a 'gerada' ao gerar PDF ou link) ou tirar a opção do filtro.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\ListaPropostas.tsx"
+        ]
+      },
+      {
+        "item": "Rótulo do botão da oportunidade",
+        "dono": "telas",
+        "detalhe": "A especificação do item 8 diz 'Montar proposta', mas o botão diz 'Nova proposta'. Voltar ao rótulo da especificação, ou registrar que a mudança foi de propósito.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\Propostas.tsx"
+        ]
+      },
+      {
+        "item": "Entrada pela conversa ou pelo contato (opcional)",
+        "dono": "telas",
+        "detalhe": "NovaProposta aceita ?contato=<id>, mas nenhuma tela usa isso. Quando a conversa ainda não tem oportunidade, dá para pôr 'Nova proposta' em Conversa.tsx ou Contatos.tsx apontando para /propostas/nova?contato=<id>.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\NovaProposta.tsx"
+        ]
+      },
+      {
+        "item": "Documentação e testes do bloco (fora da fatia, só registro)",
+        "dono": "migracao-docs",
+        "detalhe": "LEIA-ME.md ainda descreve só o fluxo antigo de PDF: não tem as rotas premium, /p/<token>, AI_MODEL_PROPOSTAS nem CHROMIUM_PACK_URL, e o .env.example também não tem essas variáveis. A pasta tests/ não tem nenhum teste premium; scripts/precos-iniciais.mjs cita tests/precos.test.ts, que não existe.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\LEIA-ME.md",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\.env.example"
+        ]
+      }
+    ],
+    "defeitos": [
+      {
+        "gravidade": "alta",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\Propostas.tsx",
+        "problema": "Regressão: o botão 'Montar proposta' da oportunidade, que funcionava e está publicado, virou um Link para /propostas/nova?oportunidade=<id>, e essa rota não existe. Se isto for publicado antes das páginas, a oportunidade fica sem nenhum caminho para montar proposta (404). O 'Abrir' do histórico também dá 404.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "alta",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+        "problema": "Na linha 169, resolverBase cria a oportunidade com phone = c.telefone || contato?.phone || '' . Mas ar1_quote_requests.phone tem CHECK char_length(btrim(phone)) BETWEEN 8 AND 32 (migração foundation), enquanto NovaProposta e validarEntrada (pedido.ts:104) tratam o telefone como opcional. Resultado: 'Nova proposta' para um cliente digitado sem telefone e sem oportunidade sempre falha com 'Não foi possível criar a oportunidade: ... violates check constraint'. O simulador não confere essa regra, então os testes não pegam. Caminhos: exigir telefone quando não há oportunidade (UI e validarEntrada) ou afrouxar a regra na migração.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\NovaProposta.tsx",
+        "problema": "Este é o erro de lint (react-hooks/set-state-in-effect) na linha 111: setAchados([]) é chamado direto no corpo do useEffect da busca de contatos quando o termo tem menos de 2 letras. Há também um aviso de eslint-disable sem uso na linha 105. Correção simples: tirar o setAchados([]) do efeito e calcular a lista na renderização (const sugestoes = termo.trim().length >= 2 ? achados : []), ou limpar no onChange. Depois, remover o comentário eslint-disable da linha 105.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+        "problema": "Em criarPropostaPremium, resolverBase cria o contato e a oportunidade, ou move a oportunidade achada para 'proposal', antes de chamar a IA. Se a IA falhar ou estourar o tempo, sobra uma oportunidade em 'Proposta' sem proposta nenhuma. Na nova tentativa de um cliente sem telefone (quando isso for permitido), nasce outra oportunidade duplicada. A especificação diz 'etapa proposal após gerar'.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\app\\api\\propostas\\premium\\route.ts",
+        "problema": "Risco de estourar o tempo (plausível, sem teste real): maxDuration 60 s, com a IA (Opus 5.5, maxTokens 12000, TIMEOUT_IA_MS 55 s) somada a 5 ou mais consultas ao banco antes da chamada. Uma proposta completa em JSON pelo Opus pode passar de 55 s, e a pessoa recebe erro depois de esperar. Avaliar maxDuration maior (Fluid) ou rodar a geração em segundo plano.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\next.config.ts",
+        "problema": "outputFileTracingIncludes só cobre a rota '/api/propostas'. A reserva pdf-lib de /api/propostas/[id]/pdf lê recursos/propostas/fontes/*.ttf e public/marca/ar1-films-logo.png do disco (pdf.ts:76-96). Na Vercel, a reserva vai falhar justamente quando o Chrome falhar, e o 'Gerar PDF' do editor devolve erro 502.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\pdf-chrome.ts",
+        "problema": "setExtraHTTPHeaders({'x-internal-secret': WEBHOOK_SECRET}) manda o segredo em todos os pedidos da página impressa, inclusive nas URLs assinadas das imagens no Supabase Storage e em qualquer outro endereço externo. É o mesmo segredo que compõe a URL do webhook do WhatsApp. Mandar o cabeçalho só para a origem APP_URL (interceptando os pedidos) ou usar um segredo próprio para impressão.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\scripts\\capturar-telas.mjs",
+        "problema": "Os cenários 19 a 24 clicam em 'Montar proposta' e esperam 'Rascunho da IA', mas esse botão não existe mais na oportunidade. O script de capturas, que é a evidência exigida na barra de qualidade, quebra nesses cenários.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\NovaProposta.tsx",
+        "problema": "Em buscarContatos (linhas 35-37), o texto digitado entra cru no filtro .or() do PostgREST. Vírgula, parênteses ou aspas no termo (por exemplo 'Silva, João') quebram o filtro, e a busca volta vazia sem mostrar erro. '%' e '_' viram curingas. É preciso escapar ou pôr entre aspas os valores.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\pedido.ts",
+        "problema": "Quando o texto não bate com nenhum serviço, servicoDaTabela devolve SERVICOS[0] ('Podcast gravado'). Com isso, NovaProposta.tsx:87 preenche um serviço errado sem avisar quando o project_type da oportunidade é algo como 'Casamento', e pedidoDaResposta faz o mesmo com os adicionais. O certo é deixar vazio quando não reconhece.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\NovaProposta.tsx",
+        "problema": "No preenchimento pela oportunidade, o nome cai para 'Contato' (nomeDoContato(null)) quando a oportunidade não tem nome nem contato. A data vem crua no formato ISO ('2026-10-24') no campo 'Data ou período'. A cidade não é preenchida. Quando falha a leitura da oportunidade, a tela diz 'Oportunidade não encontrada'.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+        "problema": "alterarPropostaPremium recalcula o investimento pela tabela atual a cada vez que salva, e deixa editar o conteúdo mesmo depois de 'aceita'. Se um preço mudou ou um item foi desativado (a linha vira 'sob consulta'), corrigir um erro de digitação muda sem aviso o total de uma proposta já enviada ou aceita. O editor deveria avisar quando o total muda, e o servidor deveria bloquear ou versionar a edição de proposta aceita.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\publico.ts",
+        "problema": "podeMarcar deixa ir de 'enviada' para 'gerada', e desfazer 'aceita' ou 'recusada' sempre volta para 'gerada', mesmo quando sent_at existe. A proposta perde a situação 'enviada'.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\dados.ts",
+        "problema": "Em caso de erro, chamar() só aproveita 'erro', 'falta_migracao' e 'campo'. Os campos {erros, passo} do 400 de /api/propostas/premium se perdem, e a tela mostra 'Confira os campos marcados.' sem marcar nenhum campo.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\apresentacao.css",
+        "problema": "A regra global @page {size: A4 landscape} passa a valer para qualquer página do painel impressa depois que o editor carregar a prévia, porque o CSS importado pelo componente continua carregado.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\registro.ts",
+        "problema": "COLUNAS='*' faz a lista geral (GET /api/propostas, até 300 linhas) trazer o content jsonb inteiro de cada proposta, e a tela usa só cliente e investimento. A resposta fica pesada no celular.",
+        "dono": "backend"
+      }
+    ],
+    "contratos_de_api": "Todas as rotas exigem sessão da equipe, menos /p e /api/p. Os wrappers ficam em src/lib/propostas/dados.ts, arquivo do navegador, e todos devolvem Resposta<T> = {ok:true,...T} | {ok:false, erro, faltaMigracao?, campo?}. Se a migração não foi aplicada, a rota responde 503 com falta_migracao:true.\n\n1) LISTA GERAL: GET /api/propostas[?busca=&situacao=rascunho|gerada|enviada|aceita|recusada] devolve {ok, propostas: PropostaRegistro[]}: até 300, premium e PDF, mais recentes primeiro. Wrapper: buscarTodasAsPropostas({busca?, situacao?}). ListaPropostas filtra do lado do navegador.\n\n2) HISTÓRICO DA OPORTUNIDADE: GET /api/propostas?oportunidade=<uuid> devolve {ok, propostas} (até 50). Wrapper: buscarPropostas(oportunidadeId).\n\n3) CRIAR (passo 3): POST /api/propostas/premium. Corpo: {cliente:{contact_id: uuid|null, oportunidade_id: uuid|null, nome*, empresa, telefone, email, cidade}, pedido:{servico* (um de SERVICOS em precos.ts), servicos_adicionais: string[] (até 6), descricao (ou quantidades)*, data_periodo, local, publico_objetivo, quantidades, observacoes}, dias_link: 1..365 (padrão 30), sem_ia?: boolean}. Resposta: {ok, proposta: PropostaRegistro (kind 'premium', status 'gerada', public_token, public_expires_at, unconfirmed_prices), pendencias: string[], avisos: string[], modelo: string|null}. Erro 400: {erro, erros: Record<campo,msg>, passo: 1|2}. Validar antes no navegador com validarEntrada() de premium/pedido.ts. Wrapper: criarPropostaPremium(entrada, semIA). Efeitos no servidor: acha ou cria o contato (telefone com 10 dígitos ou mais) e a oportunidade (source 'outro', status 'proposal'); com contato achado, move a oportunidade aberta para 'proposal'.\n\n4) PUXAR DA CONVERSA (passo 2): POST /api/propostas/premium/puxar, corpo {contact_id}. Resposta: {ok, pedido: Pedido, cliente: {cidade, empresa, email}, modelo}. Dá 404 quando o contato não existe ou não tem mensagens. Não grava nada. Wrapper: puxarPedidoDaConversa(contactId).\n\n5) LER (editor): GET /api/propostas/[id]. Resposta: {ok, proposta: PropostaRegistro, imagens: Record<caminhoNoBucket, urlAssinada24h>}. Wrapper: lerPropostaPremium(id).\n\n6) SALVAR, SITUAÇÃO E VALIDADE DO LINK: PATCH /api/propostas/[id], com qualquer combinação de três campos. (a) conteudo: PropostaPremium (versao 2, titulo, subtitulo, cliente{nome, empresa}, logo_cliente, capa{frase, imagem}, entendimento, por_que_ar1[], solucao[{titulo, descricao, imagem}], escopo_detalhado[{item, descricao, quantidade, unidade}], entregas[], cronograma[{etapa, prazo}], investimento{itens[{descricao, quantidade, unidade, price_item_id|null}], desconto em R$, condicoes_pagamento}, proximos_passos[], validade_dias, observacoes, ordem_secoes[]). Os valores vindos do navegador são ignorados: o servidor recalcula pela tabela e atualiza title, total, pending_items, unconfirmed_prices e valid_until. Imagens de outra proposta são descartadas. (b) dias_link: renova public_expires_at a partir de agora. (c) situacao: 'aceita', 'recusada' ou 'gerada' (desfazer), seguindo podeMarcar. Resposta: {ok, proposta, imagens}. Dá 400 para proposta que não é premium, conteúdo vazio ou mudança de situação proibida. Wrappers: salvarConteudoPremium(id, conteudo), mudarDiasDoLink(id, dias), mudarSituacaoDaProposta(id, situacao).\n\n7) PDF: POST /api/propostas/[id]/pdf, corpo vazio. Resposta: {ok, proposta} com file_path, file_size, pages, pdf_engine 'chrome'|'pdf-lib' e pdf_error (motivo da falha do Chrome). Imprime o que está gravado, então é preciso salvar antes. Wrapper: gerarPdfPremium(id). Para baixar: GET /api/propostas/[id]/arquivo, que redireciona (302) para uma URL assinada de 10 min; dá 404 se ainda não há PDF.\n\n8) IMAGEM OU LOGO DO CLIENTE: POST /api/propostas/[id]/imagem, multipart com o campo 'arquivo' (PNG, JPG ou WebP, até 4 MB). Resposta: {ok, caminho: 'propostas/<id>/<uuid>-<nome>.<ext>', url: string|null}. No conteúdo, usar logo_cliente = caminho, ou capa.imagem / solucao[i].imagem = {origem:'cliente', arquivo: caminho}, e juntar a url ao mapa imagens da prévia. Imagens da galeria usam {origem:'galeria', arquivo: <nome de GALERIA>}. Wrapper: enviarImagemDaProposta(id, file).\n\n9) LINK PARA O CLIENTE: POST /api/propostas/[id]/link, corpo vazio. Resposta: {ok, link: '<APP_URL>/p/<token>', texto: mensagem sugerida, expira_em, dias}. Renova o link vencido e não envia nada. Wrapper: pedirLink(id).\n\n10) ENVIAR PELO WHATSAPP: POST /api/whatsapp/enviar, corpo {atendimento_id (obrigatório), text (precisa conter o link), proposal_id}. Resposta: {ok, modo: 'fila'|'direto'}. Marca sent_at, sent_by e status 'enviada'. Wrapper: enviarLink({atendimentoId, texto, propostaId}). Já existe o diálogo pronto EnvioDaProposta({proposta, atendimentoId, aoFechar, aoEnviar}) em components/Propostas.tsx. Usar atendimentoId = proposta.atendimento_id; se for null, oferecer só 'copiar link'.\n\n11) PÚBLICO (sem login): GET /p/<token> (com ?impressao=1 é o modo do PDF). POST /api/p/<token>/aceitar, corpo {nome}, devolve {ok, nome}, ou 400/404/409/410 com {erro}.\n\nTABELA DE PREÇOS NO NAVEGADOR (RLS equipe): buscarItensDePreco() de src/lib/precos/dados.ts devolve {ok, itens: ItemDePreco[]} com id, service, name, description, unit, price, min_qty, includes[], active, confirmed e sort_order. agruparPorServico(itens) fica em precos.ts.\n\nFUNÇÕES PURAS PARA O EDITOR: recalcularInvestimento(linhas, tabela, {desconto, condicoesPagamento}), usaValoresNaoConfirmados, AVISO_NAO_CONFIRMADO, textoDoTotalPremium, reaisPremium e quantidadeLegivel (premium/investimento.ts). ORDEM_PADRAO, ROTULO_SECAO, LIMITES_PREMIUM, conferirPremium, secoesVisiveis e caminhoDeImagemValido (premium/conteudo.ts). GALERIA, TAGS_DA_GALERIA, TAGS_POR_SERVICO, tagsDoServico, escolherImagens e urlDaGaleria (galeria.ts). podeMarcar, ROTULO_STATUS_PROPOSTA, estadoDoLink e urlPublica (premium/publico.ts).\n\nPRÉVIA: <ApresentacaoPremium dados={{conteudo, numero, emitidaEm, validaAte, imagens}} modo=\"previa\" acoes={null}/>.\n\nCOMBINADO ENTRE AS TELAS: NovaProposta grava sessionStorage['ar1.proposta.avisos.<id>'] = {pendencias, avisos} e depois navega para /propostas/<id>?nova=1. O editor lê e apaga essa chave."
+  },
+  {
+    "fatia": "Itens 3 (parte da IA), 4, 5 e 8 da aba Propostas premium. Arquivos: src/lib/propostas/premium/* (conteudo, esquema, investimento, pdf-chrome, pedido, prompt, publico, reserva, servidor), src/lib/propostas/galeria.ts, src/app/api/propostas/* e src/app/api/p/[token]/aceitar, com uma olhada de apoio em registro.ts, dados.ts, env.ts, ia.ts, proxy.ts, Propostas.tsx, NovaProposta.tsx, /p/[token]/page.tsx e na migração 20260930110000. Auditoria só de leitura: nenhum arquivo do projeto foi alterado. Para ter evidência, rodei um teste vitest avulso só na pasta temporária (scratchpad/audit/auditoria.test.ts), chamando as funções puras de verdade. O eslint desta fatia passou sem erros.",
+    "pronto": [
+      "REGRA DE VALORES no investimento: o esquema da IA (esquema.ts) só tem descricao, quantidade e price_item_id. O prompt manda a tabela sem preço (tabelaParaPrompt). recalcularInvestimento ignora qualquer valor vindo de fora e usa o preço da tabela, aplica min_qty, limita a quantidade a 1000 e o desconto ao subtotal. O PATCH do editor também recalcula sempre. Teste avulso: mandei valor_unitario=1 e o servidor usou 1200 da tabela.",
+      "SOB CONSULTA: price_item_id nulo, inventado ou de item inativo vira linha com valor_unitario e valor_total nulos. O conteúdo guarda a contagem sob_consulta, a coluna total fica null quando nenhuma linha tem valor, sai o aviso interno '1 item ... sob consulta' e textoDoTotalPremium mostra 'R$ X + N itens sob consulta'. Teste avulso: id 'inventado' virou sob consulta com aviso.",
+      "AVISO DE NAO CONFIRMADO: cada linha leva nao_confirmado, a linha do banco leva unconfirmed_prices e existe o texto AVISO_NAO_CONFIRMADO. A página /p/[token] monta ApresentacaoPremium no servidor, e AcoesDoCliente (o componente do navegador) só recebe token, número, título, aceitaPor e linkAtivo. O aviso não chega ao cliente.",
+      "IA monta o conteúdo completo: capa, entendimento, por_que_ar1, solução, escopo, entregas, cronograma, investimento, próximos passos, validade, observações e pendências para a equipe. Usa env.aiModelPropostas (AI_MODEL_PROPOSTAS, padrão anthropic/claude-opus-5.5, ou claude-opus-5-5 com a API direta). A mudança em ia.ts é mínima: só o campo opcional `modelo`. O nome do cliente vem do cadastro, não da IA. O prompt tem regra contra injeção. Existe o modo sem_ia.",
+      "Criar oportunidade e contato: resolverBase acha o contato pelo id ou pelo telefone e cria o contato quando o telefone tem 10 dígitos ou mais. Acha a oportunidade aberta do contato ou cria uma com source 'outro', source_path 'propostas', status 'proposal' e assigned_to = quem gerou. A numeração AR1-AAAAMMDD-XXXX tenta de novo se o número colidir.",
+      "Puxar da conversa: POST /api/propostas/premium/puxar. O prompt leva as últimas 60 mensagens, o resumo da análise, o contexto do cliente e a base de conhecimento. pedidoDaResposta encaixa o serviço na lista de 13 serviços, remove repetidos dos adicionais, aplica limites e valida o e-mail. Não grava nada.",
+      "Envio pelo WhatsApp: reaproveita /api/whatsapp/enviar com proposal_id. marcarComoEnviada grava sent_at e muda a situação para 'enviada' só a partir de rascunho ou gerada, e funciona mesmo antes da migração. /api/propostas/[id]/link dá a página /p/<token> das premium (renova o token vencido) e o PDF assinado de 7 dias das antigas.",
+      "Marcar aceita/recusada: PATCH situacao com as transições de podeMarcar, grava decided_at e decided_by, e dá para reabrir como 'gerada'. Aceite público: nome com 2+ caracteres, link ativo e proposta ainda não decidida; grava aceita, accepted_at e accepted_name.",
+      "Token público: 32 bytes em base64url (43 caracteres), validado por ehToken, coluna UNIQUE, validade padrão de 30 dias (1 a 365). proxy.ts deixa /p/ passar sem login.",
+      "Galeria: as 30 imagens de public/marca/galeria estão todas no índice com legenda, tags (podcast, haras, leilão, evento, campo, estúdio, institucional) e orientação. TAGS_POR_SERVICO cobre os 13 serviços. escolherImagens pontua por tag sem repetir e nunca volta vazio. completarImagens põe imagem na capa e na solução quando a IA não escolheu ou escolheu um arquivo que não existe. Imagem enviada só vale se o caminho for propostas/<id-desta-proposta>/.",
+      "Item 8: em Propostas.tsx o botão da oportunidade leva a /propostas/nova?oportunidade=<id>. O histórico continua na oportunidade: as premium com link para /propostas/<id> e as antigas com o PDF. NovaProposta.tsx já lê ?oportunidade e ?contato para preencher o formulário.",
+      "PDF: gerarPdfPremium imprime a própria página /p/<token>?impressao=1 pelo Chrome (chromium-min 153 + puppeteer-core 25, ambos já na lista de pacotes externos do Next). Se o Chrome falhar, usa o gerador pdf-lib antigo e grava o motivo em pdf_error e o motor usado em pdf_engine. O arquivo fica no bucket ar1-context e o caminho em file_path."
+    ],
+    "lacunas": [
+      {
+        "item": "Telas /propostas, /propostas/nova e /propostas/[id] não existem",
+        "dono": "telas",
+        "detalhe": "src/app/(app)/propostas/ não existe. O botão 'Nova proposta' da oportunidade (Propostas.tsx:227), o 'Abrir' do histórico (/propostas/<id>), o redirecionamento de NovaProposta.tsx depois de gerar e o item Propostas do menu (Shell.tsx) vão todos dar 404 se publicar assim. NovaProposta.tsx e ListaPropostas.tsx já existem, mas nenhuma página os usa.",
+        "arquivos": [
+          "atendimento/src/components/Propostas.tsx",
+          "atendimento/src/components/NovaProposta.tsx",
+          "atendimento/src/components/ListaPropostas.tsx"
+        ]
+      },
+      {
+        "item": "Testes vitest da fatia não existem",
+        "dono": "backend",
+        "detalhe": "Não há nenhum teste para: recálculo pela tabela, aviso de não confirmado, sob consulta, token e validade, contagem de visualizações, aceite, seleção de imagens por tag, 'puxar da conversa' com IA simulada, aplicarRespostaPremium, propostaParaReserva, podeMarcar. scripts/precos-iniciais.mjs cita tests/precos.test.ts, que não existe.",
+        "arquivos": [
+          "atendimento/tests/",
+          "atendimento/scripts/precos-iniciais.mjs"
+        ]
+      },
+      {
+        "item": "Simulador não cobre as propostas premium",
+        "dono": "backend",
+        "detalhe": "simular-supabase.mjs não tem ar1_price_items. A IA falsa só responde retomada, proposta antiga e resumo (linha ~741) e não reconhece MARCA_PROMPT_PREMIUM ('PROPOSTA PREMIUM DA AR1') nem MARCA_PROMPT_PEDIDO. A busca por public_token também não existe. Sem isso não dá para fazer as capturas com dados simulados que a barra de qualidade pede.",
+        "arquivos": [
+          "atendimento/scripts/simular-supabase.mjs"
+        ]
+      },
+      {
+        "item": "Marcar como enviada à mão e enviar para contato sem conversa",
+        "dono": "backend",
+        "detalhe": "podeMarcar recusa gerada->enviada. Se a equipe manda o link pelo (62) 98125-2338, que não está ligado ao sistema, ou copia o link, a situação fica 'gerada' para sempre. Além disso, /api/whatsapp/enviar exige atendimento_id. Para um cliente digitado com telefone novo, o contato é criado sem conversa (proposta.atendimento_id = null) e o botão 'Enviar pelo WhatsApp' não tem como funcionar. Precisa liberar gerada->enviada manual (com sent_at/sent_by) e a tela precisa esconder o envio quando atendimento_id for null.",
+        "arquivos": [
+          "atendimento/src/lib/propostas/premium/publico.ts",
+          "atendimento/src/app/api/whatsapp/enviar/route.ts"
+        ]
+      },
+      {
+        "item": "Pendências e avisos da IA não ficam guardados",
+        "dono": "backend",
+        "detalhe": "criarPropostaPremium devolve pendencias e avisos mas não grava. NovaProposta guarda só no sessionStorage de quem gerou. Outra pessoa da equipe, ou a mesma depois de fechar a aba, não vê os recados 'conferir antes de enviar'. Sugestão: coluna jsonb (ex.: internal_notes) na migração e gravar junto na criação.",
+        "arquivos": [
+          "atendimento/src/lib/propostas/premium/servidor.ts",
+          "supabase/migrations/20260930110000_ar1_propostas_premium.sql"
+        ]
+      },
+      {
+        "item": "A equipe não consegue dar valor a uma linha fora da tabela",
+        "dono": "backend",
+        "detalhe": "A especificação fala em 'alterar valores/quantidades (recalcula)'. Hoje qualquer linha sem price_item_id vira 'sob consulta', e a única alavanca é o desconto. Deslocamento ou preço negociado para um cliente não entram. Decisão do proprietário: (a) só tabela + desconto, como está; ou (b) permitir 'valor definido pela equipe' só no editor, com marca e aviso interno. A IA continua proibida de definir valor nos dois casos.",
+        "arquivos": [
+          "atendimento/src/lib/propostas/premium/investimento.ts"
+        ]
+      },
+      {
+        "item": "Situação 'rascunho' nunca acontece",
+        "dono": "backend",
+        "detalhe": "A criação já grava 'gerada' e gerar o PDF não muda a situação. Nada produz 'rascunho', mas ele está na lista e nos filtros. Duas saídas: nascer 'rascunho' e virar 'gerada' ao gerar o PDF ou o link, ou tirar 'rascunho' da interface.",
+        "arquivos": [
+          "atendimento/src/lib/propostas/premium/servidor.ts"
+        ]
+      },
+      {
+        "item": "Aceite ou recusa não chegam à equipe nem ao funil",
+        "dono": "backend",
+        "detalhe": "Quando o cliente aceita pela página, ninguém é avisado e não aparece sugestão de mover a oportunidade para Ganho. Recusada não pede motivo nem sugere Perdido. O PATCH de situação só aceita propostas premium, então as antigas (PDF) não podem ser marcadas aceita ou recusada.",
+        "arquivos": [
+          "atendimento/src/lib/propostas/premium/servidor.ts",
+          "atendimento/src/lib/propostas/sugestoes.ts"
+        ]
+      },
+      {
+        "item": "Lista geral: falta quem fez e mais filtros",
+        "dono": "backend",
+        "detalhe": "GET /api/propostas devolve created_by só como uuid, sem nome (a tela precisa buscar em ar1_staff). Os filtros são só situação e busca: não há serviço nem período. O limite de 300 é aplicado antes da busca por texto.",
+        "arquivos": [
+          "atendimento/src/lib/propostas/premium/servidor.ts"
+        ]
+      },
+      {
+        "item": "Erros de validação por campo se perdem no navegador",
+        "dono": "telas",
+        "detalhe": "POST /api/propostas/premium responde 400 com {erros, passo}, mas chamar() em dados.ts só repassa erro, faltaMigracao e campo. A tela não consegue marcar os campos a partir da resposta do servidor (hoje só valida do próprio lado com validarEntrada).",
+        "arquivos": [
+          "atendimento/src/lib/propostas/dados.ts"
+        ]
+      },
+      {
+        "item": "Documentação e variáveis",
+        "dono": "migracao-docs",
+        "detalhe": "LEIA-ME.md não tem as rotas premium (/api/propostas/premium, /puxar, /[id] GET e PATCH, /[id]/pdf, /[id]/imagem, /api/p/[token]/aceitar, /p/[token]), a tabela de preços, a regra de valores premium, a galeria e o PDF pelo Chrome. .env.example não tem AI_MODEL_PROPOSTAS, CHROMIUM_PACK_URL nem CHROME. O LEIA-ME ainda chama o botão de 'Montar proposta', mas agora ele se chama 'Nova proposta'.",
+        "arquivos": [
+          "atendimento/LEIA-ME.md",
+          "atendimento/.env.example"
+        ]
+      }
+    ],
+    "defeitos": [
+      {
+        "gravidade": "alta",
+        "arquivo": "atendimento/src/lib/propostas/premium/servidor.ts",
+        "problema": "Cliente sem telefone quebra a criação (resolverBase). O formulário deixa o telefone opcional, mas a oportunidade é gravada com `phone: c.telefone || contato?.phone || \"\"`. A coluna ar1_quote_requests.phone é NOT NULL com CHECK de 8 a 32 caracteres. Resultado: qualquer cliente digitado sem telefone e sem contato cai em 'Não foi possível criar a oportunidade: ...violates check constraint'. O pedido era 'para cliente que veio pelo WhatsApp ou não', então esse caso tem de funcionar. Correção: exigir telefone quando não há oportunidade nem contato, ou mudar a restrição da coluna na migração.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "alta",
+        "arquivo": "atendimento/src/lib/propostas/premium/prompt.ts",
+        "problema": "A regra 'a IA nunca define valor' só vale no prompt; nenhum código confere os textos. condicoes_pagamento, entendimento, solução, observações e entregas passam direto para o cliente. Teste avulso: 'Sinal de R$ 2.000 e saldo na entrega' e 'Investimento de R$ 9.000 no total' ficaram intactos, sem aviso nenhum, com a tabela somando R$ 4.800. O fluxo antigo tinha essa trava em código (valores.ts). Correção: em aplicarRespostaPremium, detectar valores (R$, 'mil', 'reais', números com milhar) nos textos da IA e remover o trecho ou gerar aviso e pendência; o prompt deve pedir condições em percentual e prazo, sem valores.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "atendimento/src/lib/propostas/premium/servidor.ts",
+        "problema": "Qualquer 'Salvar' refaz todos os valores pela tabela do momento (alterarPropostaPremium + recalcularInvestimento). Se o preço mudou, ou o item foi desativado ou apagado, uma proposta já enviada ou aceita muda de valor ou vira 'sob consulta' sem ninguém perceber, e a página do cliente passa a mostrar o novo. Teste avulso: item inativo virou valor null. Isso contradiz o comentário de lerTabelaDePrecos ('para o recálculo respeitar o que a proposta já usa'). Também não há trava de conteúdo depois de aceita ou recusada. Correção: manter o preço já gravado quando o item e a quantidade não mudaram (ou avisar a diferença) e bloquear edição de proposta aceita.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "atendimento/src/lib/propostas/premium/reserva.ts",
+        "problema": "O PDF de reserva (pdf-lib) mostra total errado. O pdf.ts antigo soma as linhas (sem o desconto) e propostaParaReserva corta o investimento em 12 linhas, enquanto a premium aceita 20. Teste avulso com 14 itens e desconto de R$ 1.000: o PDF soma R$ 54.350, o total certo é R$ 63.350, e ao mesmo tempo aparece a frase 'total de R$ 63.350,00'. 'Sob consulta' sai como 'a definir'. O cliente recebe um documento com valores contraditórios.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "atendimento/next.config.ts",
+        "problema": "outputFileTracingIncludes só inclui fontes e logo para a rota \"/api/propostas\". A reserva pdf-lib agora roda em /api/propostas/[id]/pdf e lê recursos/propostas/fontes/*.ttf e a logo do disco (process.cwd()). Na Vercel esses arquivos não vão junto com essa função, então quando o Chrome falha a reserva provavelmente falha também (ENOENT) e o usuário fica sem PDF. Falta a chave '/api/propostas/[id]/pdf'.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "atendimento/src/lib/propostas/premium/servidor.ts",
+        "problema": "criarPropostaPremium chama resolverBase ANTES da IA. Contato e oportunidade são criados, e a oportunidade achada pelo contato vai para 'Proposta', antes de a proposta existir. Se a IA falhar ou estourar o tempo, fica uma oportunidade em Proposta sem proposta. Sem telefone, cada nova tentativa cria outra oportunidade duplicada. A especificação diz 'etapa proposal após gerar'. Correção: chamar a IA com os dados do formulário primeiro e só então criar ou mover a oportunidade e gravar, ou desfazer o que foi criado se der erro.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "atendimento/src/lib/propostas/premium/servidor.ts",
+        "problema": "O tempo não fecha. A chamada ao Opus com maxTokens 12000 tem limite de 55 s (TIMEOUT_IA_MS), numa rota com maxDuration 60, somada às leituras e inserts antes e depois. Uma proposta completa em JSON (3 a 5 mil tokens de saída) pode passar de 55 s, e a Vercel pode cortar a função no meio (junto com o defeito anterior, deixa sujeira no banco). É preciso medir com uma chamada real. Se passar, subir maxDuration (Fluid, até 300 s) e o limite da IA, ou gerar em duas etapas.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "atendimento/src/lib/propostas/premium/servidor.ts",
+        "problema": "A contagem de visitas (registrarVisita, chamada pela página /p/[token]) conta qualquer pedido que não traga o segredo interno. O robô de prévia do WhatsApp ou do Facebook, que busca o link na hora do envio para montar o Open Graph, e a própria equipe abrindo o link contam como 'cliente viu', e first_viewed_at fica errado desde o primeiro minuto. O incremento também não é atômico (lê, soma e grava). Correção: ignorar user-agents de robôs (WhatsApp, facebookexternalhit, bots) e sessões da equipe, e incrementar no banco (rpc ou update com views+1).",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "atendimento/src/lib/propostas/premium/conteudo.ts",
+        "problema": "A validade da proposta e a do link não batem. normalizarPremium e aplicarRespostaPremium usam o VALIDADE_PADRAO_DIAS antigo (15 dias), mas o link vale 30 dias (DIAS_LINK_PADRAO). A mensagem do WhatsApp diz 'vale até' o 15º dia, e a página continua aceitando até o 30º: aceitarPelaPagina recebe valid_until e não confere. Resultado: o cliente pode aceitar uma proposta vencida. Correção: padrão de 30 dias para a premium, ou o link expirar no valid_until, e recusar o aceite depois do valid_until.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "atendimento/src/lib/propostas/premium/pdf-chrome.ts",
+        "problema": "pagina.setExtraHTTPHeaders({'x-internal-secret': WEBHOOK_SECRET}) coloca o segredo em TODAS as requisições da página, inclusive para outros domínios: as URLs assinadas *.supabase.co do logo e das fotos do cliente. É o mesmo segredo que autentica o webhook da ponte do WhatsApp. A página ainda compara esse segredo com === (sem comparação de tempo constante). Correção: interceptar as requisições e só pôr o cabeçalho quando for a mesma origem, ou trocar por um token de impressão curto (HMAC com expiração) em vez do segredo do webhook.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "atendimento/src/lib/propostas/premium/servidor.ts",
+        "problema": "aceitarProposta usa um update condicional (.in status) mas não confere se alguma linha foi alterada. Se a equipe marcar recusada ao mesmo tempo, o cliente vê 'aceita' sem nada gravado. Do lado da equipe, a troca de situação lê e depois grava sem condição, então vence quem gravar por último.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "atendimento/src/lib/propostas/premium/pedido.ts",
+        "problema": "servicoDaTabela joga qualquer texto sem correspondência no primeiro serviço: teste avulso, 'Casamento' virou 'Podcast gravado'. O padrão 'live' também casa com 'delivery' ('Cobertura de delivery' virou 'Transmissão ao vivo'). Isso afeta o 'Puxar da conversa' e a escolha das imagens. Melhor devolver vazio e deixar a pessoa escolher.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "atendimento/src/lib/propostas/premium/servidor.ts",
+        "problema": "resolverBase age diferente conforme o caminho. A oportunidade achada pelo contato vai sozinha para 'Proposta'; a que vem do botão (oportunidade_id) não muda de etapa (fica para a sugestão do painel). Também não confere se contact_id e oportunidade_id pertencem ao mesmo cliente.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "atendimento/src/lib/propostas/premium/servidor.ts",
+        "problema": "guardarImagemDaProposta confia no tipo declarado pelo navegador (arquivo.type) e não confere a assinatura do arquivo. Só a equipe acessa essa rota, então o risco é baixo.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "atendimento/src/app/p/[token]/page.tsx",
+        "problema": "A imagem do Open Graph sai sempre em .webp (galeria) ou numa URL assinada que vence em 24 h (imagem do cliente). A prévia do WhatsApp nem sempre mostra webp. É mais seguro ter uma versão JPG da capa para o Open Graph.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "supabase/migrations/20260930110000_ar1_propostas_premium.sql",
+        "problema": "O índice ar1_proposals_token_idx repete o que a restrição UNIQUE de public_token já cria.",
+        "dono": "migracao-docs"
+      }
+    ],
+    "contratos_de_api": "Todas as rotas são da equipe (sessaoDaEquipe; sem login devolvem 401), exceto /api/p/* e /p/*. Erro padrão: {ok:false, erro:string, falta_migracao?:true (503), campo?}. Funções prontas para o navegador ficam em src/lib/propostas/dados.ts; o retorno é Resposta<T> = ({ok:true} & T) | {ok:false, erro, faltaMigracao?, campo?}.\n\n1) GET /api/propostas?busca=<texto>&situacao=<rascunho|gerada|enviada|aceita|recusada> -> {ok, propostas: PropostaRegistro[]}. Traz até 300 propostas, das duas espécies (kind 'pdf'|'premium'), mais recentes primeiro. A busca olha número, título, serviço e content.cliente.nome/empresa. Função: buscarTodasAsPropostas({busca, situacao}).\n   GET /api/propostas?oportunidade=<uuid> -> {ok, propostas} (até 50). Função: buscarPropostas(id).\n   PropostaRegistro (tipos.ts): id, quote_request_id, contact_id, atendimento_id, number, title, content (PropostaPremium quando kind='premium'), total (number|null; null = tudo sob consulta), pending_items (quantas linhas sob consulta), valid_until 'AAAA-MM-DD', file_path|null, pages, model, created_by (uuid), created_at, sent_at, sent_by, kind, status, service, public_token, public_days, public_expires_at, views, first_viewed_at, last_viewed_at, accepted_at, accepted_name, decided_at, decided_by, unconfirmed_prices (aviso interno), pdf_engine ('chrome'|'pdf-lib'|null), pdf_error (motivo da falha do Chrome), updated_at.\n\n2) POST /api/propostas/premium. Corpo: {cliente:{contact_id?:uuid, oportunidade_id?:uuid, nome*, empresa, telefone, email, cidade}, pedido:{servico*, servicos_adicionais:string[], descricao (ou quantidades)*, data_periodo, local, publico_objetivo, quantidades, observacoes}, dias_link?: 1..365 (padrão 30), sem_ia?: boolean}.\n   -> 200 {ok, proposta: PropostaRegistro (kind 'premium', status 'gerada', public_token pronto), pendencias: string[] (recados para a equipe), avisos: string[] (inclui AVISO_NAO_CONFIRMADO e o aviso de sob consulta), modelo: string|null}.\n   -> 400 {ok:false, erro:'Confira os campos marcados.', erros:{nome|telefone|email|servico|descricao: msg}, passo:1|2}.\n   A validação é a mesma no navegador: validarEntrada() em premium/pedido.ts; clienteVazio(), pedidoVazio(), LIMITES_PEDIDO e DIAS_LINK_PADRAO também estão lá. Função: criarPropostaPremium(entrada, semIA). Atenção: ela descarta erros e passo. Nada é enviado ao cliente nesta rota.\n\n3) POST /api/propostas/premium/puxar. Corpo: {contact_id: uuid} -> {ok, pedido: Pedido, cliente: {cidade, empresa, email} (strings, podem vir vazias), modelo}. 400 sem contato; 404 para contato inexistente ou sem mensagens. Não grava nada. Função: puxarPedidoDaConversa(contactId).\n\n4) GET /api/propostas/[id] -> {ok, proposta, imagens: Record<caminhoNoBucket, urlAssinada24h>}. Função: lerPropostaPremium(id).\n\n5) PATCH /api/propostas/[id]. Corpo com um ou mais destes campos:\n   - conteudo: PropostaPremium inteiro. No investimento vão só itens [{descricao, quantidade, unidade?, price_item_id|null}], desconto (em reais) e condicoes_pagamento. O servidor recalcula tudo pela tabela e descarta valor_unitario, valor_total, subtotal e total que vierem.\n   - dias_link: número (renova public_expires_at a partir de agora).\n   - situacao: 'aceita' | 'recusada' | 'gerada'. 'gerada' serve para reabrir. 'enviada' NÃO é aceita aqui. aceita e recusada não valem a partir de rascunho.\n   -> {ok, proposta, imagens}. 400 para validação (conferirPremium: título, nome do cliente e algum conteúdo), transição proibida ou proposta que não é premium. Imagens enviadas só valem com caminho propostas/<este id>/...\n   Funções: salvarConteudoPremium(id, conteudo), mudarSituacaoDaProposta(id, situacao), mudarDiasDoLink(id, dias).\n   Prévia no navegador sem ir ao servidor: recalcularInvestimento(linhas, tabela, {desconto, condicoesPagamento}) de premium/investimento.ts, com a tabela lida por buscarItensDePreco() (src/lib/precos/dados.ts, pelo navegador com RLS). Também: usaValoresNaoConfirmados, AVISO_NAO_CONFIRMADO, textoDoTotalPremium, reaisPremium, quantidadeLegivel, TEXTO_SOB_CONSULTA.\n   Forma e regras do conteúdo em premium/conteudo.ts: PropostaPremium {versao:2, titulo, subtitulo, cliente{nome, empresa}, logo_cliente|null, capa{frase, imagem}, entendimento, por_que_ar1[], solucao[{titulo, descricao, imagem}], escopo_detalhado[{item, descricao, quantidade, unidade}], entregas[], cronograma[{etapa, prazo}], investimento, proximos_passos[], validade_dias, observacoes, ordem_secoes[]}. ImagemDaProposta = {origem:'galeria'|'cliente', arquivo}. Também ali: ORDEM_PADRAO, ROTULO_SECAO, LIMITES_PREMIUM, secoesVisiveis, conferirPremium.\n\n6) POST /api/propostas/[id]/pdf (corpo vazio, até 60 s) -> {ok, proposta} com file_path, pages, pdf_engine e pdf_error. 502 quando o Chrome e a reserva falham os dois. Função: gerarPdfPremium(id).\n   GET /api/propostas/[id]/arquivo -> 302 para a URL assinada do PDF (10 min); 404 em JSON se ainda não há PDF.\n\n7) POST /api/propostas/[id]/link -> {ok, link, texto (mensagem pronta para o WhatsApp), expira_em: ISO|null, dias}. Premium: link /p/<token>, e um token vencido é renovado. Antiga: PDF assinado de 7 dias. Não envia nada. Função: pedirLink(id).\n\n8) Enviar pelo WhatsApp (rota já existente): POST /api/whatsapp/enviar {atendimento_id: uuid (obrigatório), text, proposal_id} -> marca sent_at e situação 'enviada'. Função: enviarLink({atendimentoId, texto, propostaId}). Use proposta.atendimento_id; se ele for null, não há conversa e o envio não é possível.\n\n9) POST /api/propostas/[id]/imagem: multipart com o campo 'arquivo' (PNG, JPG ou WebP até 4 MB) -> {ok, caminho:'propostas/<id>/<uuid>-nome.ext', url: assinada 24 h}. Depois use conteudo.logo_cliente = caminho ou imagem = {origem:'cliente', arquivo: caminho} e salve pelo PATCH. Função: enviarImagemDaProposta(id, file).\n\n10) Página e rota públicas (sem login): GET /p/[token] (?impressao=1 é o modo de impressão). POST /api/p/[token]/aceitar {nome} -> {ok, nome} | {ok:false, erro} com 400 (nome curto), 404, 409 (já decidida) ou 410 (link vencido). Apoio em premium/publico.ts: ROTULO_STATUS_PROPOSTA, ehStatusProposta, podeMarcar, estadoDoLink, linkDoWhatsapp, WHATSAPP_COMERCIAL_LEGIVEL.\n\n11) Galeria (módulo puro src/lib/propostas/galeria.ts): GALERIA (arquivo, legenda, tags, orientacao), TAGS_DA_GALERIA, urlDaGaleria(arquivo) -> '/marca/galeria/<arquivo>', escolherImagens(tags, n, {evitar, orientacao}), tagsDoServico(servico), ehImagemDaGaleria.\n\n12) Fluxo antigo, que continua: POST /api/propostas/rascunho e POST /api/propostas (PDF simples)."
+  },
+  {
+    "fatia": "Itens 6 e 7: página pública /p/[token] (page.tsx, api/p/[token]/aceitar, premium/publico.ts, ApresentacaoPremium.tsx, AcoesDoCliente.tsx, apresentacao.css, proxy.ts) e PDF premium (premium/pdf-chrome.ts, premium/reserva.ts, api/propostas/[id]/pdf, gerarPdfPremium em premium/servidor.ts, dependências do Chromium no package.json). Auditoria somente leitura: o repositório não foi alterado (git status igual ao do início, com 31 entradas). As provas foram geradas na pasta de rascunho: o componente real ApresentacaoPremium foi renderizado com react-dom/server e medido/impresso no Chrome local com o puppeteer-core do projeto. Capturas em C:\\Users\\cerra\\AppData\\Local\\Temp\\claude\\c--ALESSANDRO-CERRANO-MOREIRA-OFICIAL-SISTEMA-ACM\\15ef54b0-4e13-4027-8238-ffd683d02be2\\scratchpad\\render\\ (celular-investimento-tela-5.html.png, impressao-investimento-impressao-9.html.png, impressao-escopo.png). Também rodei a reserva pdf-lib real com conteúdo típico. O lint dos arquivos da fatia passa sem erro.",
+    "pronto": [
+      "Página pública /p/[token] (E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\app\\p\\[token]\\page.tsx): renderizada no servidor, force-dynamic e robots noindex/nofollow. Devolve 404 para token inválido, desconhecido ou proposta que não é premium. Link vencido mostra a tela 'Este link venceu' com botão de WhatsApp. ?impressao=1 liga o modo PDF sem os botões.",
+      "Open Graph e Twitter card com título, subtítulo/frase e a imagem da capa em URL absoluta (galeria em env.appUrl ou URL assinada).",
+      "proxy.ts: o matcher exclui 'p/', então /p/<token> abre sem login. /propostas continua protegida, porque a exclusão exige a barra. Imagens da galeria (.webp/.png) e /_next/static já eram liberadas. /api/p/* não passa pelo proxy, como as demais /api.",
+      "Token: 32 bytes de randomBytes em base64url (43 caracteres). O formato /^[A-Za-z0-9_-]{32,128}$/ é validado antes de consultar o banco. Coluna public_token UNIQUE com CHECK de 32 a 128. Validade padrão de 30 dias (1 a 365), gravada em public_expires_at ao criar. O 'Link para o cliente' renova o vencimento.",
+      "Banco: a leitura pública usa service role no servidor. ar1_proposals tem RLS só para a equipe e REVOKE para anon, então nada fica exposto pelo PostgREST.",
+      "Aceite (POST /api/p/[token]/aceitar + aceitarPelaPagina): exige link ativo, proposta não decidida e nome de 2 a 200 caracteres (espaços normalizados). Grava status=aceita, accepted_at e accepted_name com update protegido por .in('status', ...). O formulário tem passo de confirmação e mensagens de erro.",
+      "Botão 'Falar no WhatsApp': wa.me/5562981252338 com texto pronto (encodeURIComponent), target=_blank e rel=noopener noreferrer.",
+      "Visualizações: views, first_viewed_at e last_viewed_at são atualizados a cada renderização. A chamada interna do PDF (x-internal-secret) não conta.",
+      "Proteção contra XSS e injeção: não há dangerouslySetInnerHTML em src. Todo texto passa pelo JSX. As URLs de fundo vêm só da galeria indexada (ehImagemDaGaleria) ou do caminho do bucket validado por regex. O WhatsApp é montado com encodeURIComponent.",
+      "Dados expostos: ApresentacaoPremium é componente de servidor. O conteúdo bruto não vai para o navegador, e campos internos (nao_confirmado, price_item_id, unconfirmed_prices, model, created_by) não aparecem. AcoesDoCliente recebe só token, número, título, nome do aceite e estado do link.",
+      "ApresentacaoPremium: a mesma marcação serve para tela, prévia e impressão. Seções de altura de tela, 5 lâminas com foto de fundo e véu escuro, tabela de investimento com subtotal/desconto/total e 'sob consulta', fecho com contatos.",
+      "apresentacao.css segue a marca: #111315, #292d30, #f2efe8, #b86b45, Montserrat 800 em caixa alta e Inter (next/font no layout raiz), sem clichês. No celular (390 px) só a tabela de investimento vaza (ver defeito). O documento não tem rolagem horizontal.",
+      "Impressão: @page A4 paisagem com margem 0, uma lâmina de 297x210 mm por seção. Conferido no Chrome: 11 lâminas viram 11 páginas.",
+      "pdf-chrome.ts: puppeteer-core 25.12.0 + @sparticuz/chromium-min 153.0.0 (CHROMIUM_PACK_URL, padrão no pacote v153 compatível em env.ts). Fora da Vercel usa Chrome ou Edge local (ou a variável CHROME). printBackground, displayHeaderFooter=false, margens 0, preferCSSPageSize. Espera as fontes e as imagens de fundo. Emula print em viewport de 1600x900.",
+      "No Next 16, a lista server-external-packages já traz @sparticuz/chromium-min e puppeteer-core, então não falta configuração no next.config.",
+      "gerarPdfPremium: tenta o Chrome na própria página pública com o segredo interno. Se falhar, usa o pdf-lib pela reserva. Grava pdf_engine e pdf_error (motivo do Chrome, até 480 caracteres), envia para ar1-context em propostas/<oportunidade>/<numero>.pdf com upsert e atualiza file_path, file_size e pages. Cria o token se faltar.",
+      "Rota POST /api/propostas/[id]/pdf: exige sessão da equipe, runtime nodejs, maxDuration 60, erros padronizados.",
+      "Migração: colunas kind, status, service, public_token, public_days, public_expires_at, views, first/last_viewed_at, accepted_at/name, decided_at/by, unconfirmed_prices, pdf_engine, pdf_error e updated_at com CHECKs. pages passa a 1 a 60 e file_path fica opcional. Tudo em transação.",
+      "No build antigo, as fontes e a logo do pdf-lib foram incluídas também nas sub-rotas de /api/propostas. A reserva não deve perder os arquivos na Vercel por causa do rastreamento de arquivos."
+    ],
+    "lacunas": [
+      {
+        "item": "Testes vitest do item 9 para esta fatia",
+        "dono": "backend",
+        "detalhe": "Não há teste em tests/ para publico.ts (tokenDeBytes, ehToken, estadoDoLink, lerDiasDoLink/expiraEm, registrarVisualizacao, aceitarPelaPagina, podeMarcar, linkDoWhatsapp) nem para reserva.ts (propostaParaReserva + limite de páginas). O pedido cobra token e validade, contagem de visualizações e aceite.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\tests",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\publico.ts",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\reserva.ts"
+        ]
+      },
+      {
+        "item": "Documentação e variáveis",
+        "dono": "migracao-docs",
+        "detalhe": "LEIA-ME.md e .env.example não citam AI_MODEL_PROPOSTAS, CHROMIUM_PACK_URL nem CHROME (Chrome local). Também não explicam a rota pública /p/<token> fora do login, nem que o cabeçalho x-internal-secret (WEBHOOK_SECRET) agora ignora a validade do link público. Falta registrar que o caminho do Chrome na Vercel nunca foi testado.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\LEIA-ME.md",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\.env.example"
+        ]
+      },
+      {
+        "item": "Telas do PDF e da página pública no editor",
+        "dono": "telas",
+        "detalhe": "Nenhum componente chama POST /api/propostas/[id]/pdf (/propostas/[id] ainda não existe). Faltam: botão 'Gerar PDF' com espera de até 60 s; mostrar pdf_engine e o motivo em pdf_error quando saiu pela reserva; baixar via /api/propostas/[id]/arquivo; mostrar vencimento do link (public_expires_at), quem aceitou e quando (accepted_name/accepted_at), primeira e última visualização; prévia com <ApresentacaoPremium modo=\"previa\">.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\app\\(app)\\propostas",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\ListaPropostas.tsx",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\Propostas.tsx"
+        ]
+      },
+      {
+        "item": "Aceite não chega ao funil nem avisa a equipe",
+        "dono": "backend",
+        "detalhe": "aceitarProposta só atualiza ar1_proposals. A oportunidade (ar1_quote_requests) fica em 'proposal' e ninguém recebe aviso (fila, resumo ou WhatsApp do dono). A equipe só descobre abrindo a lista. Sugestão: mover para 'won' ou 'negotiating' e registrar um evento ou aviso.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts"
+        ]
+      },
+      {
+        "item": "Rastro do aceite",
+        "dono": "backend",
+        "detalhe": "O aceite guarda só o nome digitado. Não registra IP, user-agent nem versão ou total aceito. Como vale como evidência comercial, convém gravar ao menos o total e o updated_at do conteúdo no momento do aceite.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\supabase\\migrations\\20260930110000_ar1_propostas_premium.sql"
+        ]
+      },
+      {
+        "item": "Cabeçalhos de segurança da página pública",
+        "dono": "backend",
+        "detalhe": "Não há frame-ancestors/X-Frame-Options nem Referrer-Policy em /p/*. A página com o botão de aceite pode ser embutida em iframe. Adicionar headers() no next.config só para /p/:path*.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\next.config.ts"
+        ]
+      },
+      {
+        "item": "Chrome na Vercel sem teste",
+        "dono": "backend",
+        "detalhe": "O caminho @sparticuz/chromium-min só roda na Vercel e nunca foi exercitado. O README do pacote v153 recomenda headless: \"shell\" e args: await puppeteer.defaultArgs({ args: chromium.args, headless: \"shell\" }); o código usa headless: true. O pacote é baixado do GitHub a cada partida a frio. Convém hospedar o .tar em armazenamento próprio e testar numa prévia antes de depender dele.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\pdf-chrome.ts"
+        ]
+      },
+      {
+        "item": "Prévia no WhatsApp",
+        "dono": "backend",
+        "detalhe": "og:image aponta para .webp da galeria de até 335 KB, com largura e altura fixas em 1600x900 que podem não bater com o arquivo. O WhatsApp costuma exigir JPG/PNG leve. Sugestão: rota opengraph-image (JPG 1200x630) ou uma versão .jpg da capa.",
+        "arquivos": [
+          "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\app\\p\\[token]\\page.tsx"
+        ]
+      }
+    ],
+    "defeitos": [
+      {
+        "gravidade": "alta",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\apresentacao.css",
+        "problema": "No celular (390 px), a coluna 'Total' da tabela de investimento some. Causa: .ap-tabela .ap-dir { white-space: nowrap } e o unitário com unidade ('R$ 12.500,00 por evento') fazem a tabela passar 88 a 96 px da lâmina, e .ap-lamina { overflow: hidden } corta o excesso. Não aparece rolagem: o cabeçalho TOTAL e o total de cada linha simplesmente somem. Foi medido no componente real com 5 e com 9 itens (captura celular-investimento-tela-5.html.png). Como a página é mobile-first e o cliente abre pelo WhatsApp no celular, ele não vê os valores por linha. Correção: no celular, trocar a tabela por cartões por item ou esconder a coluna Unitário, e/ou usar overflow-x: auto num contêiner da tabela.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "alta",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\reserva.ts",
+        "problema": "A reserva pdf-lib falha em propostas premium de tamanho normal. gerarPdfDaProposta (pdf.ts) tem limite de 3 páginas (MAXIMO_DE_PAGINAS), e propostaParaReserva envia solução + escopo (até 16), entregas, cronograma, condições e próximos passos. Rodei o código real: a versão 'enxuta' (3 itens, 3 soluções, 5 escopos) saiu com 3 páginas. A 'típica' (5 itens, 4 soluções, 8 escopos de 150 caracteres, 6 entregas, entendimento de 700 caracteres) e a 'rica' deram erro 'A proposta ficou com 4 páginas e o máximo é 3'. Resultado: se o Chrome falhar na Vercel (nunca testado), gerarPdfPremium devolve 502 e fica sem PDF. Correção: resumir mais na reserva (cortar descrições, menos itens) ou permitir mais páginas no gerador quando chamado pela reserva.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "alta",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\apresentacao.css",
+        "problema": "O PDF corta conteúdo sem avisar. No modo impressão, cada lâmina tem altura fixa de 210 mm com overflow: hidden e justify-content: center, então o que passa da página é cortado em cima e embaixo. Medido no Chrome com o componente real: 'solução' com 6 cartões perde 132 px em cima e embaixo (título some); 'escopo' com 16 itens perde 133 px (título 'O QUE ESTÁ INCLUÍDO' some, itens 15 e 16 cortados sobre o rodapé, captura impressao-escopo.png); 'investimento' com 9 linhas perde o rótulo INVESTIMENTO e as condições de pagamento ficam por baixo do rodapé (impressao-investimento-impressao-9.html.png). Com uns 11 itens ou mais, o TOTAL sai da página. Os limites de conteúdo (escopo 16, investimento 20, solução 6 x 500 caracteres) permitem isso. Correção: quebrar em lâminas de continuação (dividir itens por página no componente em modo impressão), usar justify-content: safe center e/ou reduzir a fonte conforme o volume.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+        "problema": "A contagem de visualizações não é confiável. registrarVisita roda em toda renderização do servidor (page.tsx linha 92), então conta robôs de prévia de link (WhatsApp/Evolution, Facebook, antivírus de e-mail) e a própria equipe conferindo o link pelo painel. Com isso, first_viewed_at pode marcar a hora do envio, e não a abertura pelo cliente. Além disso, o incremento lê e depois grava (update com views+1 calculado em JS), e visitas simultâneas se perdem. Correção: contar por um beacon do cliente após a hidratação (POST /api/p/[token]/visita), ignorar user-agents de robô e sessão da equipe, e incrementar no banco (RPC com views = views + 1).",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\publico.ts",
+        "problema": "O aceite ignora a validade comercial da proposta (valid_until / validade_dias). aceitarPelaPagina só olha a validade do link, que é de 30 dias por padrão, pode ir até 365 e é renovada pelo 'Link para o cliente'. Teste: aceitarPelaPagina({status:'enviada', link ativo, valid_until:'2020-01-01'}, 'Maria') devolveu ok:true. O fecho diz 'Esta proposta vale até X', mas o botão Aceitar continua depois de X, com preços antigos. Correção: recusar (410) quando o dia atual em Brasília passar de valid_until e mostrar isso na página.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "media",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\pdf-chrome.ts",
+        "problema": "Não há prazo total para o Chrome. goto (45 s), evaluate das imagens (45 s pelo setDefaultTimeout), pdf (45 s) e o download/extração do Chromium na partida a frio somam mais que maxDuration=60 da rota. Se o Chrome travar, a Vercel mata a função antes do catch: a reserva pdf-lib não roda, pdf_error não é gravado e a tela recebe 504 sem motivo. Correção: Promise.race com um prazo total de uns 35 a 40 s, fechando o navegador, para sobrar tempo para a reserva e o upload.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\pdf-chrome.ts",
+        "problema": "setExtraHTTPHeaders({'x-internal-secret': WEBHOOK_SECRET}) manda o segredo em todos os pedidos da página, inclusive para outros domínios: URLs assinadas do Supabase Storage (logo e fotos do cliente) e qualquer imagem externa no futuro. O segredo do webhook sai do perímetro. Correção: page.setRequestInterception e só pôr o cabeçalho no pedido do documento da mesma origem (ou usar um token de impressão curto e específico). Em page.tsx, a comparação também não usa timingSafeEqual.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\servidor.ts",
+        "problema": "aceitarProposta não confere se o update protegido (.in('status', ['gerada','enviada','rascunho'])) mudou alguma linha. Com dois aceites ao mesmo tempo, ou a equipe marcando 'recusada' entre a leitura e a gravação, a rota responde ok:true e mostra 'aceita por <nome>' com um nome que não foi gravado. Correção: .select('id') e devolver 409 quando vier vazio.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\app\\p\\[token]\\page.tsx",
+        "problema": "A página pública não trata a situação 'recusada': AcoesDoCliente recebe só aceitaPor e linkAtivo, mostra 'Aceitar proposta' e só depois do nome digitado responde 'Esta proposta foi encerrada'. No link vencido, a página mostra duas mensagens de 'venceu' (o título e o aviso do AcoesDoCliente) e ap-acoes aninhado.",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\app\\p\\[token]\\page.tsx",
+        "problema": "generateMetadata não olha o estado do link: depois de vencido, a prévia continua mostrando título, subtítulo, cliente e capa. O title usa o modelo do layout raiz ('%s · AR1 Atendimento'), então a aba do cliente mostra o nome interno do painel; usar title: { absolute }. A proposta é lida duas vezes e as imagens assinadas duas vezes por visita (metadata + página); usar cache() do React.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\lib\\propostas\\premium\\publico.ts",
+        "problema": "estadoDoLink deixa o link aberto quando falta dado: public_expires_at nulo ou data inválida vira 'ativo' para sempre (conferido: null => ativo, 'xx' => ativo). Hoje toda criação grava o vencimento, mas o certo é tratar nulo e inválido como vencido, ou usar created_at + public_days.",
+        "dono": "backend"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\atendimento\\src\\components\\apresentacao.css",
+        "problema": "scroll-snap-type em .ap-rolagem não tem efeito, porque a div não é o contêiner que rola (quem rola é o documento). O @page { size: A4 landscape } é global e vale também para a impressão das telas do painel que carregarem este CSS (prévia do editor).",
+        "dono": "telas"
+      },
+      {
+        "gravidade": "baixa",
+        "arquivo": "E:\\CLIENTES\\AR1 STUDIOS\\ar1studios-site\\supabase\\migrations\\20260930110000_ar1_propostas_premium.sql",
+        "problema": "ar1_proposals_token_idx repete o índice que o UNIQUE de public_token já cria (índice duplicado, escrita mais lenta). A migração também não traz função para incrementar visualizações de forma atômica, que seria útil para a correção da contagem.",
+        "dono": "migracao-docs"
+      }
+    ],
+    "contratos_de_api": "PÚBLICAS (sem login; /p/ fica fora do proxy e /api não passa por ele):\n1) GET /p/<token>[?impressao=1]. Página. token casa /^[A-Za-z0-9_-]{32,128}$/. Proposta que não existe ou não é premium: 404 (notFound). Link vencido: página 'Este link venceu' (só WhatsApp). Link ativo: ApresentacaoPremium modo 'tela' com AcoesDoCliente e registra visita. ?impressao=1 mostra o modo PDF sem botões. Com o cabeçalho x-internal-secret igual a WEBHOOK_SECRET, a validade é ignorada e a visita não conta (uso só do PDF).\n2) POST /api/p/<token>/aceitar. Corpo JSON {\"nome\": string} (2 a 200 caracteres após normalizar espaços). Respostas: 200 {ok:true, nome}; 404 {ok:false, erro:'Proposta não encontrada.'}; 410 link inativo; 409 'já foi aceita' ou 'foi encerrada' (recusada); 400 'Digite seu nome para aceitar.'; 500 falha ao gravar. Grava status='aceita', accepted_at e accepted_name.\n\nEQUIPE (sessão obrigatória; sem sessão, 401 de respostaNaoAutorizado; erro padrão {ok:false, erro, falta_migracao?:true} com 503 quando a migração premium não foi aplicada):\n3) POST /api/propostas/<id>/pdf. Sem corpo. maxDuration 60 s (a tela deve mostrar 'gerando…' e aceitar até 60 s, com timeout ou 504 possível). 200 {ok:true, proposta: PropostaRegistro} com file_path, file_size, pages, pdf_engine 'chrome'|'pdf-lib' e pdf_error (motivo da falha do Chrome quando saiu pela reserva; null se o Chrome funcionou). 400 'não é premium'; 404; 502 quando o Chrome e a reserva falham (mensagem com os dois motivos); 500 falha no upload.\n4) GET /api/propostas/<id>/arquivo. 302 para a URL assinada do PDF (10 min, baixa com nome certo). 404 JSON 'ainda não tem PDF. Gere o PDF primeiro.' quando file_path é nulo.\n5) POST /api/propostas/<id>/link. Sem corpo. 200 {ok:true, link, texto, expira_em, dias}. Premium: link = <APP_URL>/p/<token>; se vencido, reativa o MESMO token com novo vencimento (public_days); texto = mensagemDoLinkPremium. Proposta PDF antiga: URL assinada de 7 dias. Não envia nada; o envio segue pelo /api/whatsapp/enviar já existente com esse texto.\n6) GET /api/propostas/<id>. 200 {ok:true, proposta, imagens: Record<caminhoNoBucket, urlAssinada 24h>}.\n7) PATCH /api/propostas/<id>. Corpo JSON com qualquer combinação de {conteudo?: PropostaPremium (o investimento só usa price_item_id, quantidade, descricao e unidade das linhas, mais desconto e condicoes_pagamento; o servidor recalcula tudo pela tabela), dias_link?: inteiro 1..365 (novo vencimento a partir de agora; cria token se faltar), situacao?: 'aceita'|'recusada'|'gerada'}. Atenção: o campo é 'situacao', não 'status'. Transições (podeMarcar): aceita/recusada a partir de qualquer situação exceto rascunho; 'gerada' só a partir de aceita, recusada ou enviada (limpa accepted_*). 200 {ok:true, proposta, imagens}; 400 com a mensagem de validação.\n8) POST /api/propostas/<id>/imagem. multipart/form-data com o campo 'arquivo' (PNG/JPG/WebP até 4 MB). 200 {ok:true, caminho:'propostas/<id>/<uuid>-<nome>.<ext>', url}. Usar em conteudo.logo_cliente (caminho) ou em imagem {origem:'cliente', arquivo: caminho}; caminhos de outra proposta são descartados no PATCH.\n\nCAMPOS NOVOS de PropostaRegistro (src/lib/tipos.ts) para as telas: kind 'pdf'|'premium'; status 'rascunho'|'gerada'|'enviada'|'aceita'|'recusada'; service; public_token; public_days; public_expires_at; views; first_viewed_at; last_viewed_at; accepted_at; accepted_name; decided_at; decided_by; unconfirmed_prices (aviso interno, nunca para o cliente); pdf_engine; pdf_error; file_path (pode ser null); updated_at.\n\nCOMPONENTES E FUNÇÕES PURAS para as telas:\n- <ApresentacaoPremium dados={{conteudo, numero, emitidaEm:'AAAA-MM-DD', validaAte:'AAAA-MM-DD', imagens (do GET/PATCH), base?}} modo='previa' /> para a prévia do editor (lâminas 16:9 que cabem na coluna). urlDaImagem(img, dados) resolve a URL de galeria ou de envio.\n- Em publico.ts: ROTULO_STATUS_PROPOSTA, ehStatusProposta, podeMarcar(atual, novo) para habilitar os botões Aceita/Recusada, estadoDoLink(p) ('ativo'|'expirado'|'sem_link') para o selo do link, urlPublica(appUrl, token), WHATSAPP_COMERCIAL_LEGIVEL.\n- Em investimento.ts: reaisPremium, textoDoTotalPremium, quantidadeLegivel, TEXTO_SOB_CONSULTA, AVISO_NAO_CONFIRMADO (mostrar quando unconfirmed_prices=true)."
+  }
+]

@@ -8,7 +8,8 @@ sugerida) e a equipe aprova, edita ou descarta a resposta antes de enviar.
 **A IA nunca envia nada sozinha.** Toda mensagem que sai passa por alguém da
 equipe. No funil vale o mesmo: a IA sugere etapa, valor, probabilidade e
 próxima ação, e nada muda sem o clique de uma pessoa. Na proposta também: a IA
-monta o rascunho, a pessoa revisa, gera o PDF e decide se envia. A única
+escreve a apresentação, **os valores vêm só da tabela de preços** (a IA nunca
+define preço), a pessoa revisa, gera o PDF e decide se envia o link. A única
 mensagem automática é o resumo diário, que é interno (vai para o dono).
 
 Projeto Next.js separado do site, dentro da pasta `atendimento/` do repositório.
@@ -22,10 +23,14 @@ Na Vercel, é um projeto próprio com **Root Directory = `atendimento`**.
 | `/` Fila | Atendimentos abertos, com abas por status, busca, selos da IA, não lidas, "Resposta sugerida pronta" e responsável. Atualiza em tempo real. |
 | `/atendimento/[id]` Conversa | Linha do tempo (texto, imagem, áudio, vídeo, documento, figurinha, localização, contato), status, assumir, encerrar, painel da IA, **contexto deste cliente** (textos e documentos do contato), resposta sugerida (enviar / descartar / pedir outra), composer livre e **oportunidade do funil** (criar, resumo e sugestões da IA com Aceitar). No desktop, a fila fica ao lado. |
 | `/funil` Funil | Quadro por etapas (Novo, Qualificado, Em contato, Proposta, Negociação, Ganho, Perdido), total em aberto, previsão ponderada, filtros e "Nova oportunidade". No desktop, arrastar e soltar; no celular, uma etapa por vez e "Mover para…" no cartão. |
-| `/funil/[id]` Oportunidade | Campos comerciais, notas internas, próxima ação, histórico simples, "Abrir conversa", leitura e sugestões da IA, **Montar proposta** e histórico de propostas em PDF. Em tela larga abre como painel ao lado do quadro. |
+| `/funil/[id]` Oportunidade | Campos comerciais, notas internas, próxima ação, histórico simples, "Abrir conversa", leitura e sugestões da IA, **Nova proposta** (abre `/propostas/nova` já preenchida) e histórico de propostas (premium e PDF antigas, com a situação). Em tela larga abre como painel ao lado do quadro. |
+| `/propostas` Propostas | Todas as propostas: número, cliente, serviço, total, situação (rascunho, gerada, enviada, aceita, recusada), data e quem fez. Busca, filtro por situação e **Nova proposta**. No menu, entre Funil e Retomar. |
+| `/propostas/nova` | Nova proposta em passos: cliente (contato do WhatsApp ou digitado) → pedido (com **Puxar da conversa**) → a IA monta a apresentação → abre o editor. Aceita `?oportunidade=<id>` ou `?contato=<id>` para vir preenchida. |
+| `/propostas/[id]` | Editor visual com prévia ao lado (abaixo no celular): textos, imagens, ordem das seções, itens e quantidades do investimento (recalcula na hora), desconto, condições. Salvar, Gerar PDF, Link para o cliente, Enviar pelo WhatsApp, Marcar como aceita ou recusada. |
+| `/p/[token]` **(pública, sem login)** | A apresentação que o cliente abre pelo link: tela cheia, rolável, com **Aceitar proposta** e **Falar no WhatsApp**. Conta as visitas. |
 | `/retomar` Retomar | Conversas paradas com a mensagem de retomada pronta: enviar, adiar (1, 3 ou 7 dias) ou descartar. Botão "Gerar agora". |
 | `/contatos` | Buscar contatos, corrigir nome/empresa, observações (a IA lê) e bloquear spam. |
-| `/configuracoes` | Estado do WhatsApp, QR code, instruções e serviços usados pela IA, **dias sem retorno para sugerir retomada**, **resumo diário** (ligar, telefones, prévia, enviar agora), **base de conhecimento da AR1**, lista da equipe. |
+| `/configuracoes` | Estado do WhatsApp, QR code, instruções e serviços usados pela IA, **dias sem retorno para sugerir retomada**, **resumo diário** (ligar, telefones, prévia, enviar agora), **base de conhecimento da AR1**, **tabela de preços** (só administradores alteram), lista da equipe. |
 
 Rotas de servidor:
 
@@ -45,11 +50,18 @@ Rotas de servidor:
 | `POST /api/contexto` | Cria um documento: texto digitado, ou arquivo já enviado (lê e extrai o texto). |
 | `GET / PATCH / DELETE /api/contexto/[id]` | Texto completo, alteração (título, texto, "usar na IA") e exclusão (linha + arquivo). |
 | `GET /api/contexto/[id]/arquivo` | Redireciona para a URL assinada (10 min) do arquivo original. |
-| `POST /api/propostas/rascunho` | A IA monta o rascunho estruturado da proposta (`{ oportunidade_id, atendimento_id?, sem_ia? }`). Não grava nada. |
+| `POST /api/propostas/premium` | Cria a proposta premium: `{ cliente: { contact_id?, oportunidade_id?, nome, empresa, telefone, email, cidade }, pedido: { servico, servicos_adicionais[], descricao, data_periodo, local, publico_objetivo, quantidades, observacoes }, dias_link?, sem_ia? }`. A IA (`AI_MODEL_PROPOSTAS`) escreve, o servidor recalcula os valores pela tabela e grava com situação "gerada". Acha ou cria contato e oportunidade. Devolve `{ proposta, pendencias, avisos, modelo }`; campo inválido: 400 com `{ erros, passo }`. Não envia nada. |
+| `POST /api/propostas/premium/puxar` | "Puxar da conversa": `{ contact_id }` → a IA preenche o pedido a partir das mensagens e do contexto do cliente. Não grava nada. |
+| `GET /api/propostas?busca=…&situacao=…` | Lista da aba Propostas (até 300, premium e PDF, mais novas primeiro). |
 | `GET /api/propostas?oportunidade=…` | Histórico de propostas da oportunidade. |
-| `POST /api/propostas` | Gera o PDF da proposta revisada, guarda no Storage e registra no histórico. |
-| `GET /api/propostas/[id]/arquivo` | Redireciona para a URL assinada (10 min) do PDF. |
-| `POST /api/propostas/[id]/link` | Cria o link assinado de 7 dias e o texto sugerido da mensagem. Não envia. |
+| `GET / PATCH /api/propostas/[id]` | Lê a proposta (com URLs assinadas de 24 h das imagens enviadas). `PATCH` com `conteudo` (investimento só com item e quantidade: **o servidor recalcula tudo pela tabela**), `dias_link` (renova o link público) ou `situacao` (`aceita`, `recusada` ou `gerada` para reabrir). |
+| `POST /api/propostas/[id]/pdf` | PDF premium: o Chrome imprime a página pública (uma lâmina por seção); se falhar, sai a versão simples pelo `pdf-lib` e o motivo fica em `pdf_error`. Até 60 s. |
+| `POST /api/propostas/[id]/imagem` | Envia logo ou foto do cliente (campo `arquivo`, PNG/JPG/WebP até 4 MB) para `ar1-context/propostas/<id da proposta>/`. |
+| `POST /api/propostas` | Proposta em PDF simples (fluxo anterior): gera o PDF da proposta revisada, guarda no Storage e registra no histórico. |
+| `POST /api/propostas/rascunho` | Rascunho da proposta em PDF simples (fluxo anterior; `{ oportunidade_id, atendimento_id?, sem_ia? }`). Não grava nada. |
+| `GET /api/propostas/[id]/arquivo` | Redireciona para a URL assinada (10 min) do PDF (premium ou simples). 404 se ainda não tem PDF. |
+| `POST /api/propostas/[id]/link` | Premium: link da página pública `/p/<token>` (renova o link vencido) e a mensagem pronta. PDF simples: link assinado de 7 dias. Não envia. |
+| `POST /api/p/[token]/aceitar` | **Pública.** O cliente aceita pela página: `{ nome }` → grava "aceita", data e nome. 410 link vencido, 409 já decidida. |
 | `GET / POST /api/resumo/diario` | Resumo diário do dono. `GET` só para o cron e chamadas internas; `POST` também aceita sessão da equipe (`{ modo: "previa" \| "enviar", forcar, texto }`). |
 
 ## Variáveis de ambiente
@@ -71,7 +83,10 @@ repositório: `.env.local` já está no `.gitignore`.
 | `ZAPI_INSTANCE_ID`, `ZAPI_TOKEN`, `ZAPI_CLIENT_TOKEN` | Só quando `WHATSAPP_PROVIDER=zapi`. |
 | `WEBHOOK_SECRET` | Segmento secreto da URL do webhook e cabeçalho `x-internal-secret`. |
 | `CRON_SECRET` | Segredo do cron da Vercel (retomadas às 08:00 e resumo diário às 08:10). Sem ele o cron recebe 401: as retomadas só saem pelo botão "Gerar agora" e o resumo só pelo "Enviar agora". |
-| `APP_URL` | Opcional. URL pública do app (o webhook usa para agendar a análise). Na Vercel usa `VERCEL_PROJECT_PRODUCTION_URL` quando vazio. |
+| `APP_URL` | Opcional. URL pública do app (o webhook usa para agendar a análise). Na Vercel usa `VERCEL_PROJECT_PRODUCTION_URL` quando vazio. **É o endereço que vai no link da proposta** (`<APP_URL>/p/<token>`) e o que o Chrome abre para gerar o PDF: ao ligar o domínio `atendimento.ar1films.com`, troque aqui. |
+| `AI_MODEL_PROPOSTAS` | Modelo que escreve a proposta premium. Padrão `anthropic/claude-opus-5.5` (OpenRouter) ou `claude-opus-5-5` (com `AI_PROVIDER=anthropic`). O "Puxar da conversa" usa o `AI_MODEL`. |
+| `CHROMIUM_PACK_URL` | Pacote do Chromium usado no PDF premium na Vercel. Precisa ser da **mesma versão** do `@sparticuz/chromium-min` do `package.json` (hoje 153.0.0). Padrão: `https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.x64.tar`. |
+| `CHROME` | Opcional, só fora da Vercel: caminho de um Chrome ou Edge para gerar o PDF no computador (sem ele, tenta os caminhos comuns do Windows, macOS e Linux). |
 
 Na Vercel, cadastre as mesmas variáveis em Settings → Environment Variables.
 
@@ -85,6 +100,7 @@ As tabelas vêm das migrações em `../supabase/migrations/`:
 - `20260929100000_ar1_contexto.sql` — documentos de contexto (`ar1_context_docs`) e bucket privado `ar1-context`.
 - `20260929110000_ar1_funil.sql` — funil sobre `ar1_quote_requests` (etapas, valor, probabilidade, próxima ação, origem, leitura da IA, gatilho de etapa) e retomadas (`ar1_followups`).
 - `20260930100000_ar1_propostas.sql` — propostas em PDF (`ar1_proposals`): número, conteúdo aprovado, total, validade, caminho do arquivo, quem gerou e quando o link foi enviado. **Precisa ser aplicada** para gerar PDF; sem ela a tela avisa "falta aplicar a migração" e o restante do painel funciona igual. O resumo diário não pede migração.
+- `20260930110000_ar1_propostas_premium.sql` — propostas premium e tabela de preços: cria `ar1_price_items` (com a tabela inicial de 31 valores sugeridos, todos `confirmed = false`), amplia `ar1_proposals` (tipo, situação, token e validade da página pública, visualizações, aceite, aviso interno de valores não confirmados, motor do PDF), cria a função `ar1_register_proposal_view` (conta a visita num único comando), permite oportunidade sem telefone (cliente digitado sem WhatsApp) e aceita PNG/JPG/WebP no bucket `ar1-context`. **Precisa ser aplicada depois da anterior** para a aba Propostas e a tabela de preços funcionarem; sem ela as telas avisam "falta aplicar a migração". Pode ser aplicada de novo sem estragar nada (não sobrescreve preços já editados). Detalhes em [Propostas premium](#propostas-premium).
 
 O app não altera o esquema. Os gatilhos do banco cuidam de contadores, troca de
 status ("de quem é a vez"), agendamento da análise (`ai_analysis_due_at`) e de
@@ -386,7 +402,9 @@ valem a partir da próxima análise de cada conversa.
 
 A oportunidade é a linha de `ar1_quote_requests`. O pedido do site e a
 conversa do WhatsApp caem no mesmo funil (`source`: site, whatsapp, indicacao,
-outro).
+outro). A oportunidade criada pela Nova proposta de um cliente digitado vem
+com `source = 'outro'` e pode não ter telefone (`phone` vazio, permitido desde
+a migração premium).
 
 | Etapa no banco | Na tela |
 | --- | --- |
@@ -515,11 +533,173 @@ Variables e publicar. A Vercel envia `Authorization: Bearer <CRON_SECRET>`; sem
 a variável, a rota responde 401. No plano Hobby a Vercel não garante o minuto:
 o cron roda em algum momento dentro da hora marcada.
 
-## Proposta em PDF
+## Propostas premium
 
-Na oportunidade (`/funil/[id]`) e no cartão da oportunidade dentro da conversa
-há o botão **Montar proposta**. São quatro passos, e nada sai para o cliente
-sem o clique de alguém.
+A proposta que o cliente recebe é uma **apresentação**, no padrão de um deck
+feito no gamma.app: página própria com imagens de fundo, tipografia grande,
+tabela de investimento e botão de aceite. O mesmo conteúdo vira PDF. Serve
+para quem veio pelo WhatsApp e para quem não veio (cliente digitado).
+
+### Como ativar (uma vez)
+
+1. **Aplicar a migração** `20260930110000_ar1_propostas_premium.sql`, depois da
+   `20260930100000`. Pode ser pelo SQL Editor do Supabase ou pela Management API
+   (comando em `PLANO-EXECUCAO-OPUS.md`, na raiz do repositório). Para conferir:
+   `select count(*), count(*) filter (where confirmed) from ar1_price_items;`
+   deve dar 31 e 0.
+2. **Variáveis na Vercel** (Settings → Environment Variables, Production):
+   `AI_MODEL_PROPOSTAS=anthropic/claude-opus-5.5` e
+   `CHROMIUM_PACK_URL=https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.x64.tar`.
+   As duas têm esse mesmo valor como padrão no código, mas deixá-las na Vercel
+   torna a troca visível. Confira também `APP_URL` (é o endereço que vai no link).
+3. **Publicar** o painel.
+4. **Confirmar os preços** em Ajustes → Tabela de preços. Os 31 valores iniciais
+   são sugestões para Goiânia e o Brasil central em 2026. Enquanto um item não
+   for confirmado, toda proposta que o usa mostra à equipe o aviso "usa valores
+   não confirmados" (o cliente nunca vê esse aviso).
+5. **Teste de ponta a ponta**: criar uma proposta de um cliente digitado, abrir
+   o link numa janela anônima, gerar o PDF e conferir se `pdf_engine` ficou
+   `chrome` (se ficou `pdf-lib`, o motivo está em `pdf_error`).
+
+### O fluxo
+
+1. **Cliente** (`/propostas/nova`): buscar um contato do WhatsApp ou digitar
+   nome, empresa, telefone, e-mail e cidade. Se o contato não existir e houver
+   telefone (10 dígitos ou mais), ele é criado. Se não houver oportunidade
+   aberta, uma é criada no funil (`source = 'outro'`, etapa **Proposta**).
+   Quando a oportunidade é achada pelo contato e está em Novo, Qualificado ou
+   Em contato, ela passa para Proposta (vinda do botão da própria
+   oportunidade, a etapa não muda). Sem telefone, a oportunidade fica sem
+   telefone e não há conversa: dá para copiar o link, não para enviar pelo
+   WhatsApp.
+2. **Pedido**: serviço principal (um dos 13 da tabela), adicionais, o que o
+   cliente precisa, data ou período, local, público e objetivo, quantidades e
+   observações. **Puxar da conversa** pede à IA (`AI_MODEL`) que preencha a
+   partir das últimas 60 mensagens, das transcrições, do contexto do cliente e
+   da base de conhecimento. Nada é gravado nesse passo.
+3. **A IA monta** (`AI_MODEL_PROPOSTAS`, Opus 5.5; até 55 s): título,
+   subtítulo, capa (frase e imagem), entendimento, 3 motivos para a AR1,
+   solução (com imagens), escopo detalhado, entregas, cronograma,
+   investimento, condições de pagamento, próximos passos, validade e
+   observações. Ela recebe a tabela de preços ativa e a galeria. A proposta é
+   gravada com situação **gerada** e um link público pronto (ainda não
+   enviado). Recados para a equipe (`pendencias`) e avisos aparecem só no
+   editor. Se a IA falhar, **Criar em branco (sem IA)** cria a proposta só com
+   o pedido, para a pessoa escrever.
+4. **Editor** (`/propostas/[id]`): tudo é editável, com a prévia ao lado
+   (abaixo no celular), que é a mesma apresentação do cliente em lâminas 16:9.
+   Trocar imagens (galeria da AR1 ou envio de imagem/logo do cliente),
+   reordenar seções, mudar itens e quantidades (o total recalcula na hora),
+   desconto em reais e condições. Botões: Salvar, Gerar PDF, Link para o
+   cliente, Enviar pelo WhatsApp e Marcar como aceita ou recusada.
+
+Situações: `rascunho` → `gerada` → `enviada` (quando o link sai pelo WhatsApp)
+→ `aceita` (pelo cliente na página ou pela equipe) ou `recusada` (pela equipe).
+A equipe pode reabrir (`gerada`) uma proposta aceita, recusada ou enviada.
+
+### Regra dos valores
+
+**A IA nunca define valor.** Ela só escolhe o item da tabela de preços
+(`price_item_id`) e a quantidade. O servidor recalcula tudo pela tabela
+(`src/lib/propostas/premium/investimento.ts`, testado), na criação e em cada
+salvamento do editor, e descarta qualquer valor que venha da IA ou do
+navegador:
+
+- valor unitário = preço da tabela; total da linha = preço × quantidade;
+- quantidade abaixo da mínima do item sobe para a mínima (máximo 1.000);
+- item inexistente ou desativado, ou pedido sem item aplicável, vira linha
+  **"sob consulta"** (sem valor); o total mostra "R$ X + N itens sob consulta";
+- desconto em reais, nunca maior que o subtotal; total = subtotal − desconto;
+- até 20 linhas;
+- item com `confirmed = false` marca a proposta com `unconfirmed_prices`: a
+  equipe vê "Esta proposta usa valores não confirmados…". **O cliente nunca vê.**
+
+A tabela de preços (`ar1_price_items`, Ajustes → Tabela de preços) tem, por
+serviço: nome, descrição, unidade (por episódio, por dia, por projeto, por mês,
+por hora, por evento), preço, quantidade mínima, "o que inclui" (até 12
+linhas), ativo e confirmado. A equipe toda lê; **só administradores alteram**
+(regra do banco, não só da tela). Quem alterou fica gravado pelo próprio banco.
+A tabela inicial está em `scripts/precos-iniciais.mjs` (a migração é gerada
+dela; `node scripts/precos-iniciais.mjs --conferir` compara as duas).
+
+### Galeria
+
+30 fotos reais da AR1 (haras, podcast, estúdio, campo, fachada, eventos) em
+`public/marca/galeria/`, com legenda e etiquetas em
+`src/lib/propostas/galeria.ts`: `podcast`, `haras`, `leilão`, `evento`,
+`campo`, `estúdio`, `institucional`. Cada serviço tem as suas etiquetas
+(`TAGS_POR_SERVICO`); a IA escolhe por etiqueta e o editor troca. Imagem ou
+logo do cliente vai para o bucket privado `ar1-context`, em
+`propostas/<id da proposta>/` (PNG, JPG ou WebP até 4 MB); a página usa URLs
+assinadas de 24 h. Para acrescentar fotos: copie o arquivo (de preferência
+WebP) para a pasta e inclua a linha em `GALERIA` com legenda e etiquetas.
+
+### Página do cliente (`/p/<token>`)
+
+- **Pública, sem login.** O `proxy.ts` deixa `/p/` de fora da proteção. A
+  página é montada no servidor com a chave de serviço; a tabela
+  `ar1_proposals` continua fechada para visitantes anônimos.
+- **Token** aleatório de 32 bytes (43 caracteres), impossível de adivinhar.
+  O link vale 30 dias por padrão (`public_days`, 1 a 365); vencido, a página
+  mostra "Este link venceu" e só o botão do WhatsApp. **Link para o cliente**
+  renova o mesmo link vencido.
+- Apresentação rolável em tela cheia: uma seção por altura de tela, imagem de
+  fundo com sobreposição escura, títulos Montserrat em caixa alta, texto Inter,
+  cores da marca (fundo `#111315`/`#292d30`, texto `#f2efe8`, cobre `#b86b45`).
+- **Aceitar proposta**: o cliente digita o nome; grava situação "aceita", data
+  (`accepted_at`) e nome (`accepted_name`). Só com link ativo e proposta ainda
+  não decidida.
+- **Falar no WhatsApp**: abre o (62) 98125-2338 com o texto pronto.
+- **Visitas**: cada abertura conta (`views`, `first_viewed_at`,
+  `last_viewed_at`). Atenção: se alguém da equipe abrir o link no próprio
+  navegador, também conta. Para conferir, use a prévia do editor.
+- Open Graph com a capa (a prévia do link no WhatsApp mostra a imagem e o
+  título) e `noindex` (buscadores não listam).
+- Não mostra nada interno: nem o aviso de valores não confirmados, nem
+  `pdf_error`, nem pendências.
+
+### PDF premium
+
+`POST /api/propostas/[id]/pdf` abre a **mesma página** em modo de impressão
+(`/p/<token>?impressao=1`) num Chrome sem janela e imprime: A4 paisagem, uma
+lâmina por seção, com fundo e imagens, sem cabeçalho nem rodapé do navegador.
+O Chrome manda o cabeçalho `x-internal-secret` (`WEBHOOK_SECRET`): assim a
+página imprime mesmo com o link vencido e **a impressão não conta como
+visita**. O PDF imprime o que está salvo (salve antes de gerar).
+
+- **Na Vercel**: `puppeteer-core` + `@sparticuz/chromium-min`. O Chromium não
+  vai no pacote da função; na primeira chamada de cada instância ele é baixado
+  de `CHROMIUM_PACK_URL` (cerca de 70 MB, GitHub) para `/tmp`. A rota tem
+  `maxDuration = 60`. Ao atualizar o `@sparticuz/chromium-min`, troque a versão
+  na URL (os pacotes ficam em
+  <https://github.com/Sparticuz/chromium/releases>, arquivo
+  `chromium-v<versão>-pack.x64.tar`).
+- **No computador**: usa o Chrome ou o Edge instalado (variável `CHROME` ou os
+  caminhos comuns).
+- **Reserva**: se o Chrome falhar, sai a versão simples pelo `pdf-lib` (A4
+  retrato, até 3 páginas, a mesma da proposta em PDF simples) e o motivo fica
+  em `pdf_error`. `pdf_engine` diz qual dos dois gerou.
+- O arquivo fica em `ar1-context/propostas/<oportunidade>/<número>.pdf`
+  (gerar de novo substitui) e aparece no histórico com Baixar.
+
+**Ainda não testado na Vercel**: o caminho do Chromium baixado (só foi testado
+com o Chrome local). No primeiro teste em produção, confira `pdf_engine`.
+
+### Envio
+
+**Link para o cliente** devolve o link e uma mensagem pronta; não envia nada.
+**Enviar pelo WhatsApp** usa o mesmo `POST /api/whatsapp/enviar` das outras
+mensagens (com `proposal_id`), o que marca `sent_at` e a situação "enviada".
+Precisa de uma conversa (`atendimento_id`); cliente digitado sem WhatsApp só
+tem "copiar link".
+
+## Proposta em PDF simples (fluxo anterior)
+
+Era o fluxo de antes das propostas premium. O botão da oportunidade agora se
+chama **Nova proposta** e leva ao fluxo premium. As propostas em PDF antigas
+continuam no histórico, com Baixar, Enviar e "Editar e gerar nova versão", que
+reabre este editor. Os passos abaixo continuam valendo para elas, e nada sai
+para o cliente sem o clique de alguém.
 
 ### 1. Rascunho da IA
 
@@ -770,7 +950,7 @@ node scripts/capturar-telas.mjs --saida capturas/minha-rodada
 Para ver o rascunho da proposta e o resumo diário sem gastar com IA, acrescente
 ao `.env.local` da cópia a IA de mentira do simulador:
 
-```
+```text
 AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=simulado
 ANTHROPIC_BASE_URL=http://127.0.0.1:54999/anthropic
@@ -779,7 +959,9 @@ CRON_SECRET=simulado-cron
 
 O simulador também guarda arquivos na memória, então "Gerar PDF" funciona de
 ponta a ponta e o PDF pode ser baixado. Para guardar um PDF de exemplo gerado
-pelos testes: `PDF_EXEMPLO_SAIDA=<pasta> npm test`.
+pelos testes: `PDF_EXEMPLO_SAIDA=<pasta> npm test`. Fora da Vercel, o PDF
+premium usa o Chrome ou o Edge instalado no computador (`CHROME=<caminho>` para
+apontar outro).
 
 Use uma cópia com a própria `node_modules` (o Turbopack não aceita
 `node_modules` por atalho) e nunca o `.env.local` de verdade. A pasta
@@ -787,14 +969,17 @@ Use uma cópia com a própria `node_modules` (o Turbopack não aceita
 
 ## Estrutura
 
-```
+```text
 src/
-  proxy.ts                    sessão + proteção das telas
+  proxy.ts                    sessão + proteção das telas (deixa /p/ e /api de fora)
   app/
     login/                    tela de login
-    (app)/                    telas protegidas: fila, conversa, funil, retomar, contatos, configurações
+    (app)/                    telas protegidas: fila, conversa, funil, propostas, retomar, contatos, configurações
+    p/[token]/                página pública da proposta premium (sem login)
     api/                      rotas de servidor
   components/                 Fila, Conversa, Funil, OportunidadeDetalhe, Propostas, EditorProposta, ResumoDiario, Retomar…
+                              ListaPropostas, NovaProposta, ApresentacaoPremium (+ apresentacao.css), AcoesDoCliente,
+                              TabelaDePrecos (propostas premium)
   lib/
     ia.ts                     camada de IA (OpenRouter | Anthropic)
     transcricao.ts            transcrição de áudio pela OpenRouter (só servidor, testado)
@@ -817,6 +1002,17 @@ src/
     propostas/pdf.ts          PDF com a marca AR1 Films (pdf-lib; só servidor, testado)
     propostas/servidor.ts     rascunho com a IA e geração da proposta (banco + Storage)
     propostas/registro.ts     histórico, link assinado e marca de enviada (banco + Storage)
+    propostas/galeria.ts      fotos da galeria, etiquetas e escolha por serviço (puro)
+    propostas/premium/
+      pedido.ts               formulário da nova proposta (cliente + pedido) e validação (puro)
+      conteudo.ts             forma da proposta premium, seções, limites e conferência (puro)
+      investimento.ts         regra dos valores: recálculo pela tabela, sob consulta, desconto (puro)
+      prompt.ts, esquema.ts   prompt e esquema da IA (proposta e "puxar da conversa") (puro)
+      publico.ts              token, validade do link, visitas, aceite, situações (puro)
+      reserva.ts              premium → PDF simples, quando o Chrome falha (puro)
+      pdf-chrome.ts           impressão da página pelo Chrome (só servidor)
+      servidor.ts             criar, puxar, salvar, PDF, imagens, página pública e link (banco + Storage + IA)
+    precos/                   tabela de preços: tipos e validação (precos.ts), navegador (dados.ts), servidor
     resumo/numeros.ts         números do resumo diário (puro, testado)
     resumo/texto.ts           texto de reserva, prompt e conferência do texto da IA (puro, testado)
     resumo/ajustes.ts         telefones, ligar e desligar, trava de um envio por dia (puro, testado)
@@ -834,8 +1030,10 @@ src/
     supabase/                 clientes (navegador, servidor, serviço)
 recursos/propostas/fontes/    Montserrat e Inter (TTF, licença OFL) usadas no PDF
 public/marca/                 logo da AR1 Films usada no PDF
+public/marca/galeria/         fotos reais usadas nas propostas premium
 tests/                        vitest
 scripts/simular-webhook.mjs   simulador do webhook
 scripts/simular-supabase.mjs  Supabase, Storage e IA de mentira para ver as telas
 scripts/capturar-telas.mjs    capturas com dados simulados
+scripts/precos-iniciais.mjs   tabela de preços inicial (gera e confere o INSERT da migração premium)
 ```
