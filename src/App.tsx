@@ -5,6 +5,7 @@ import "@fontsource/manrope/latin-600.css";
 import "@fontsource/manrope/latin-700.css";
 import "@fontsource/manrope/latin-800.css";
 import "./App.css";
+import DroneContent, { DroneFeature } from "./pages/DroneContent";
 import { getCampaignContext, trackEvent } from "./analytics";
 import { CITY, CNPJ, EMAIL, GA4_ID, HARAS_ADDRESS, LEGAL_NAME, MAPS_URL, SITE_NAME, TAGLINE, WHATSAPP_DISPLAY, whatsappLink, whatsappMessageLink } from "./config/site";
 import { proof } from "./config/proof";
@@ -43,7 +44,7 @@ const initialLead: LeadForm = { name: "", role: "", phone: "", email: "", compan
 function pageInterest(path = window.location.pathname) {
   if (path === "/podcast" && window.location.hash === "#itinerante") return "Podcast itinerante em feira, congresso ou evento";
   if (path === "/podcast" && window.location.hash === "#ao-vivo") return "Transmissão ao vivo";
-  const interests: Record<string, string> = { "/": "Ainda preciso entender a melhor solução", "/podcast": "Gravação de podcast (gravado ou ao vivo)", "/haras-sobi": "Haras SOBI", "/leilao-360": "Leilão 360", "/consultoria-podcast": "Consultoria e implantação de estúdio de podcast", "/filme-de-legado": "Filme de marca ou legado", "/solucoes": "Operação de conteúdo", "/metodo": "Ainda preciso entender a melhor solução", "/sobre": "Ainda preciso entender a melhor solução" };
+  const interests: Record<string, string> = { "/": "Ainda preciso entender a melhor solução", "/filmagem-com-drone": "Filmagem com drone e produção audiovisual", "/podcast": "Gravação de podcast (gravado ou ao vivo)", "/haras-sobi": "Haras SOBI", "/leilao-360": "Leilão 360", "/consultoria-podcast": "Consultoria e implantação de estúdio de podcast", "/filme-de-legado": "Filme de marca ou legado", "/solucoes": "Operação de conteúdo", "/metodo": "Ainda preciso entender a melhor solução", "/sobre": "Ainda preciso entender a melhor solução" };
   return interests[path.replace(/\/+$/, "") || "/"] ?? "Ainda preciso entender a melhor solução";
 }
 
@@ -157,6 +158,7 @@ function Header() {
       <nav ref={navRef} id="main-navigation" className={open ? "nav open" : "nav"} aria-label="Navegação principal">
         <a href="/" aria-current={current("/")} onClick={() => setOpen(false)}>Home</a>
         <a href="/podcast" aria-current={current("/podcast")} onClick={() => setOpen(false)}>Podcast</a>
+        <a href="/filmagem-com-drone" aria-current={current("/filmagem-com-drone")} onClick={() => setOpen(false)}>Drones</a>
         <a href="/consultoria-podcast" aria-current={current("/consultoria-podcast")} onClick={() => setOpen(false)}>Consultoria</a>
         <a href="/haras-sobi" aria-current={current("/haras-sobi")} onClick={() => setOpen(false)}>Haras SOBI</a>
         <a href="/leilao-360" aria-current={current("/leilao-360")} onClick={() => setOpen(false)}>Leilão 360</a>
@@ -180,7 +182,7 @@ function Footer() {
     <footer className="footer">
       <div className="footer-brand"><Logo compact /><p>{TAGLINE}</p><p>{CITY}</p></div>
       <div className="footer-nav" aria-label="Soluções">
-        <span>Soluções</span><a href="/podcast">Podcast</a><a href="/consultoria-podcast">Consultoria de estúdio</a><a href="/podcast#ao-vivo">Transmissão ao vivo</a><a href="/haras-sobi">Haras SOBI</a><a href="/leilao-360">Leilão 360</a><a href="/filme-de-legado">Filme de Legado</a><p>{HARAS_ADDRESS}</p>{MAPS_URL ? <a href={MAPS_URL} target="_blank" rel="noreferrer">Ver no mapa</a> : null}<a href="/metodo">Método</a>
+        <span>Soluções</span><a href="/podcast">Podcast</a><a href="/filmagem-com-drone">Filmagem com drone</a><a href="/consultoria-podcast">Consultoria de estúdio</a><a href="/podcast#ao-vivo">Transmissão ao vivo</a><a href="/haras-sobi">Haras SOBI</a><a href="/leilao-360">Leilão 360</a><a href="/filme-de-legado">Filme de Legado</a><p>{HARAS_ADDRESS}</p>{MAPS_URL ? <a href={MAPS_URL} target="_blank" rel="noreferrer">Ver no mapa</a> : null}<a href="/metodo">Método</a>
       </div>
       <div className="footer-contact"><span>Contato</span><a href={whatsappLink("uma proposta")}>{WHATSAPP_DISPLAY}</a><a href={`mailto:${EMAIL}`}>{EMAIL}</a>{socialLinks.map(([label, url]) => <a key={label} href={url}>{label}</a>)}</div>
       <small>CNPJ {CNPJ} · © {new Date().getFullYear()} {SITE_NAME}. Todos os direitos reservados.</small>
@@ -502,6 +504,8 @@ function Home() {
 
       <Showreel />
 
+      <DroneFeature />
+
       <section className="haras-feature section-dark">
         <picture className="haras-feature-media" aria-hidden="true">
           <source media="(max-width: 700px)" srcSet="/media/haras-vista-aerea-2026-v1-mobile.webp" />
@@ -532,9 +536,15 @@ function SolutionsPage() {
     <section className="decision-section section-dark"><div className="page-shell"><Reveal><p className="eyebrow">Como decidir</p><h2>Três perguntas organizam o próximo passo.</h2></Reveal><div className="decision-grid"><article><span>01</span><h3>Você precisa de cadência?</h3><p>Operação de Conteúdo organiza especialistas, pauta, produção e entregas recorrentes.</p></article><article><span>02</span><h3>Você precisa de autonomia?</h3><p>Construir Capacidade avalia, projeta e ativa uma estrutura própria para sua organização.</p></article><article><span>03</span><h3>Você precisa realizar um marco?</h3><p>Projetos Especiais reúne transmissão, evento, filme, locação e produção sob medida.</p></article></div></div></section>
     <section className="page-section section-light"><div className="page-shell"><Reveal><p className="eyebrow">Ofertas principais</p><h2>Produtos com identidade própria.</h2></Reveal><FlagshipGrid /></div></section>
     <PodcastConsultingFeature />
+    <DroneFeature />
     <ComplementaryCapabilities />
     <ContactSection title="Vamos identificar a solução com maior aderência." />
   </main><Footer /></>;
+}
+
+function DronePage() {
+  usePageMeta("Filmagem com Drone em Goiânia | AR1 Films", "Filmagem com drone em Goiânia e Goiás, com estrutura de produtora. Captação aérea, FPV e 360°, imagens em solo e edição. Solicite orçamento à AR1.");
+  return <><Header /><main id="conteudo"><DroneContent /><ContactSection defaultProject="Filmagem com drone e produção audiovisual" title="Conte o que você precisa mostrar." /></main><Footer /></>;
 }
 
 function PodcastGallery() {
@@ -654,7 +664,7 @@ function LegacyServicePage({ slug }: { slug: string }) {
     { label: "Como executamos", title: "Método AR1", body: "Veja como objetivo, responsabilidades, estrutura e uso orientam cada projeto.", href: "/metodo" },
     { label: "Projeto de escala", title: "Haras SOBI", body: "Conheça uma das principais plataformas da AR1 para gravações, eventos e experiências.", href: "/haras-sobi" },
   ] as const;
-  return <><Header /><main id="conteudo"><PageHero eyebrow={data.eyebrow} title={data.title} summary={data.summary} image={data.image} breadcrumbs={[{ label: "Soluções", href: "/solucoes" }, { label: data.title }]} /><section className="legacy-capability section-light"><div className="page-shell split"><Reveal><p className="eyebrow">Capacidade integrada</p><h2>Esta frente faz parte da arquitetura AR1.</h2><p className="section-intro dark">A solução é combinada com estratégia, estrutura e produção conforme o contexto.</p><a className="text-link" href="/solucoes">Ver arquitetura de soluções</a></Reveal><div className="capability-list">{data.items.map((item, index) => <Reveal className="capability-row" key={item}><span>{String(index + 1).padStart(2, "0")}</span><p>{item}</p></Reveal>)}</div></div></section><RelatedJourneys items={related} /><ContactSection defaultProject={data.project} /></main><Footer /></>;
+  return <><Header /><main id="conteudo"><PageHero eyebrow={data.eyebrow} title={data.title} summary={data.summary} image={data.image} breadcrumbs={[{ label: "Soluções", href: "/solucoes" }, { label: data.title }]} /><section className="legacy-capability section-light"><div className="page-shell split"><Reveal><p className="eyebrow">Capacidade integrada</p><h2>Esta frente faz parte da arquitetura AR1.</h2><p className="section-intro dark">A solução é combinada com estratégia, estrutura e produção conforme o contexto.</p><a className="text-link" href="/solucoes">Ver arquitetura de soluções</a></Reveal><div className="capability-list">{data.items.map((item, index) => <Reveal className="capability-row" key={item}><span>{String(index + 1).padStart(2, "0")}</span><p>{item}</p></Reveal>)}</div></div></section>{data.slug === "fotografia-e-video" && <DroneFeature />}<RelatedJourneys items={related} /><ContactSection defaultProject={data.project} /></main><Footer /></>;
 }
 
 function RedirectPage({ to }: { to: string }) {
@@ -675,6 +685,7 @@ function App() {
   if (path === "/") page = <Home />;
   else if (path === "/podcast") page = <PodcastPage />;
   else if (path === "/solucoes") page = <SolutionsPage />;
+  else if (path === "/filmagem-com-drone") page = <DronePage />;
   else if (path === "/consultoria-podcast") page = <ConsultingPage />;
   else if (path === "/metodo") page = <MethodPage />;
   else if (path === "/sobre") page = <AboutPage />;

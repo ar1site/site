@@ -342,6 +342,7 @@ export const legacyServiceDetails = [
 ] as const;
 
 export const projectOptions = [
+  "Filmagem com drone e produção audiovisual",
   "Gravação de podcast (gravado ou ao vivo)",
   "Podcast itinerante em feira, congresso ou evento",
   "Transmissão ao vivo",
