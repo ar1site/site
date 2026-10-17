@@ -7,6 +7,7 @@ const template = await readFile(join(root, "dist", "index.html"), "utf8");
 const origin = "https://ar1films.com";
 
 const routes = [
+  ["filmagem-com-drone", "Filmagem com Drone em Goiânia | AR1 Films", "Filmagem com drone em Goiânia e Goiás, com estrutura de produtora. Captação aérea, FPV e 360°, imagens em solo e edição. Solicite orçamento à AR1.", "/media/drones/hero-arquitetura-aerea.webp"],
   ["podcast", "Gravação de podcast e transmissão ao vivo | AR1 Films · Goiânia e todo o Brasil", "Mais de 4 mil episódios gravados com influenciadores, artistas, políticos e criadores. Gravado e editado até a postagem ou ao vivo. Estúdio montado em qualquer lugar do Brasil."],
   ["solucoes", "Soluções | AR1 Films", "Produzimos para você, montamos a estrutura para a sua equipe produzir, ou os dois."],
   ["consultoria-podcast", "Consultoria de estúdio de podcast | Projeto, implantação e treinamento", "Do diagnóstico ao treinamento da equipe: seu estúdio nasce funcionando. AR1 Films, Goiânia - GO."],
@@ -37,6 +38,20 @@ for (const [route, title, description, heroImage] of routes) {
     .replace(/(<meta name="twitter:description" content=")[^"]*(" \/>)/, `$1${escapeAttribute(description)}$2`)
     .replace(/(<link rel="canonical" href=")[^"]*(" \/>)/, `$1${url}$2`);
   if (heroImage) html = html.replace(/(<link rel="preload" as="image" href=")[^"]*(" fetchpriority="high" \/>)/, `$1${heroImage}$2`);
+
+  if (route === "filmagem-com-drone") {
+    const content = await readFile(join(root, "src", "pages", "drone-content.html"), "utf8");
+    // O conteúdo editorial permanece legível antes da montagem do React e sem JavaScript.
+    const contact = `<section id="contato" class="contact section-dark"><div class="page-shell"><h2>Conte o que você precisa mostrar.</h2><p>Informe o local e o objetivo da gravação para receber uma proposta da AR1.</p><a class="button primary" href="https://wa.me/5562981252338?text=Quero%20um%20or%C3%A7amento%20para%20filmagem%20com%20drone">Pedir orçamento pelo WhatsApp</a></div></section>`;
+    html = html.replace('<div id="root"></div>', `<div id="root"><main id="conteudo"><div class="drone-page">${content}</div>${contact}</main></div>`)
+      .replace(/<meta name="keywords"[^>]*>\s*/, "")
+      .replace(/(<meta (?:property="og:image"|name="twitter:image") content=")[^"]*(" \/>)/g, `$1${origin}${heroImage}$2`);
+    const droneSchema = { "@context": "https://schema.org", "@graph": [
+      { "@type": "Service", "@id": `${url}#service`, name: "Filmagem com drone e produção audiovisual", serviceType: "Captação aérea e produção audiovisual", url, provider: { "@id": `${origin}/#organization` }, areaServed: [{ "@type": "City", name: "Goiânia" }, { "@type": "State", name: "Goiás" }] },
+      { "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "Início", item: `${origin}/` }, { "@type": "ListItem", position: 2, name: "Filmagem com drone", item: url }] },
+    ] };
+    html = html.replace("</head>", `<script type="application/ld+json">${JSON.stringify(droneSchema)}</script>\n</head>`);
+  }
 
   const routeSchema = JSON.stringify({ "@context": "https://schema.org", "@type": "WebPage", name: title, description, url, inLanguage: "pt-BR", isPartOf: { "@id": `${origin}/#website` } });
   html = html.replace("</head>", `    <script type="application/ld+json">${routeSchema}</script>\n  </head>`);
