@@ -2,6 +2,8 @@
 
 Produção atual: repositório `ar1site/site`, projeto Vercel `ar1films`, domínio https://ar1films.com. A integração da página de drones e suas instruções de manutenção estão em [docs/DRONES_2026-10-17.md](docs/DRONES_2026-10-17.md). Os documentos datados abaixo registram etapas anteriores do projeto.
 
+A experiência **Interativo** está integrada em `/interativo`, pelo menu superior, conforme [docs/INTERATIVO_2026-10-17.md](docs/INTERATIVO_2026-10-17.md).
+
 Site institucional estático da AR1 Studios, voltado à solicitação de proposta. O ponto de partida atualizado está em [docs/ESTADO_ATUAL_SITE_AR1_STUDIOS_2026-09-01.md](docs/ESTADO_ATUAL_SITE_AR1_STUDIOS_2026-09-01.md).
 
 ## Como editar

@@ -49,7 +49,7 @@ h3 { letter-spacing: -.035em; }
 .brand-link { display: flex; align-items: center; width: 168px; }
 .logo { width: 168px; height: auto; }
 .logo.compact { width: 152px; }
-.nav { display: flex; align-items: center; gap: clamp(18px, 2.4vw, 34px); font-size: 12px; font-weight: 700; }
+.nav { display: flex; align-items: center; gap: clamp(14px, 1.8vw, 28px); font-size: 12px; font-weight: 700; }
 .nav a { position: relative; transition: color .2s ease; }
 .nav a:hover { color: var(--copper-light); }
 .nav a[aria-current="page"] { color: var(--copper-light); }
