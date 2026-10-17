@@ -1,0 +1,82 @@
+{
+  "/filmagem-com-drone": {
+    "title": "Filmagem com Drone em Goiânia | AR1 Films",
+    "description": "Filmagem com drone em Goiânia e Goiás, com estrutura de produtora. Captação aérea, FPV e 360°, imagens em solo e edição. Solicite orçamento à AR1.",
+    "heroImage": "/media/drones/hero-arquitetura-aerea.webp"
+  },
+  "/podcast": {
+    "title": "Gravação de podcast e transmissão ao vivo | AR1 Films · Goiânia e todo o Brasil",
+    "description": "Mais de 4 mil episódios gravados com influenciadores, artistas, políticos e criadores. Gravado e editado até a postagem ou ao vivo. Estúdio montado em qualquer lugar do Brasil.",
+    "heroImage": "/media/podcast-entrevista-v1.webp"
+  },
+  "/solucoes": {
+    "title": "Soluções | AR1 Films",
+    "description": "Produzimos para você, montamos a estrutura para a sua equipe produzir, ou os dois.",
+    "heroImage": "/media/edit-suite.webp"
+  },
+  "/consultoria-podcast": {
+    "title": "Consultoria de estúdio de podcast | Projeto, implantação e treinamento",
+    "description": "Do diagnóstico ao treinamento da equipe: seu estúdio nasce funcionando. AR1 Films, Goiânia - GO.",
+    "heroImage": "/media/consultoria-hero-estudio-v1.webp"
+  },
+  "/haras-sobi": {
+    "title": "Haras SOBI | Locação para shows, DVDs, clipes e eventos em Goiânia",
+    "description": "Mais de 20 cenários, pista de laço e área coberta para 4 mil pessoas na GO-010, saída de Goiânia. Locação e produção pensadas juntas.",
+    "heroImage": "/media/haras-vista-aerea-2026-v1.webp"
+  },
+  "/metodo": {
+    "title": "Método AR1 | Produção séria começa antes da gravação",
+    "description": "Entender, desenhar, produzir e melhorar. Você aprova o escopo antes de gastar.",
+    "heroImage": "/media/camera-auction.webp"
+  },
+  "/sobre": {
+    "title": "Sobre a AR1 Films | Goiânia - GO",
+    "description": "Nascemos no agro de Goiás e aprendemos a produzir onde não dá para errar.",
+    "heroImage": "/media/cattle-rays.webp"
+  },
+  "/leilao-360": {
+    "title": "Leilão 360 | Transmissão de leilão ao vivo, aquecimento e pós-evento",
+    "description": "Conteúdo de aquecimento, transmissão dirigida e melhores momentos em uma única operação. AR1 Films, Goiânia - GO.",
+    "heroImage": "/media/event-stage.webp"
+  },
+  "/filme-de-legado": {
+    "title": "Filme de Legado | Documentário de memória empresarial e familiar",
+    "description": "Pesquisa, entrevistas e direção para preservar a história de empresas, famílias e territórios. AR1 Films.",
+    "heroImage": "/media/horse.webp"
+  },
+  "/servicos/transmissao-ao-vivo": {
+    "title": "Transmissão ao vivo | AR1 Films",
+    "description": "Planejamento, captação, direção e operação de transmissões ao vivo.",
+    "heroImage": "/media/camera-auction.webp"
+  },
+  "/servicos/fotografia-e-video": {
+    "title": "Fotografia e vídeo | AR1 Films",
+    "description": "Produção audiovisual integrada a objetivos de comunicação, acervo e relacionamento.",
+    "heroImage": "/media/haras-pista-e-cavalo-2026-v1.webp"
+  },
+  "/servicos/podcast-itinerante": {
+    "title": "Podcast itinerante | AR1 Films",
+    "description": "Entrevistas e conversas produzidas em empresas, feiras, eventos e locações especiais.",
+    "heroImage": "/media/edit-suite.webp"
+  },
+  "/servicos/eventos-e-conteudo": {
+    "title": "Eventos e conteúdo | AR1 Films",
+    "description": "Cobertura e ativos editoriais para ampliar a vida útil de eventos.",
+    "heroImage": "/media/event-stage.webp"
+  },
+  "/servicos/producao-externa": {
+    "title": "Produção externa | AR1 Films",
+    "description": "Equipe, logística e captação dimensionadas para produções em locação.",
+    "heroImage": "/media/haras-bosque-2026-v1.webp"
+  },
+  "/servicos/projetos-integrados": {
+    "title": "Projetos integrados | AR1 Films",
+    "description": "Estratégia, conteúdo, audiovisual e transmissão coordenados em um único projeto.",
+    "heroImage": "/media/cattle-wide.webp"
+  },
+  "/": {
+    "title": "AR1 Films | Produção audiovisual, locação e transmissões em Goiânia",
+    "description": "Locação de grande escala no Haras SOBI (+20 cenários, área coberta para 4 mil pessoas), transmissão de leilões, estúdios de podcast e filmes de legado. Goiânia - GO.",
+    "heroImage": "/media/ar1-films-fachada-2026-v1.webp"
+  }
+}

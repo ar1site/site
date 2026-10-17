@@ -106,11 +106,14 @@ export async function POST(request: Request) {
 
   let dados: Record<string, unknown>;
   try { dados = await request.json(); } catch { return resposta(400, { ok: false, erro: "formato" }); }
+  if (!dados || typeof dados !== "object" || Array.isArray(dados)) return resposta(400, { ok: false, erro: "formato" });
   if (typeof dados.website === "string" && dados.website.trim()) return resposta(200, { ok: true }); // armadilha para robôs
 
   const lead = Object.fromEntries((Object.keys(LIMITES) as Campo[]).map((campo) => [campo, typeof dados[campo] === "string" ? (dados[campo] as string).trim().slice(0, LIMITES[campo]) : ""])) as Lead;
-  if (!lead.name || !lead.company || !lead.project || lead.phone.replace(/\D/g, "").length < 8) return resposta(422, { ok: false, erro: "campos" });
+  const telefoneValido = /^\+?[\d\s().-]+$/.test(lead.phone) && /^\d{10,15}$/.test(lead.phone.replace(/\D/g, ""));
+  if (!lead.name || !lead.company || !lead.project || !telefoneValido) return resposta(422, { ok: false, erro: "campos" });
   const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email);
+  if (lead.email && !emailValido) return resposta(422, { ok: false, erro: "email" });
 
   const funil = await gravarNoFunil(lead, emailValido);
   if (funil === "limite") return resposta(429, { ok: false, erro: "limite" });
