@@ -169,6 +169,7 @@ function Header() {
         <a href="/leilao-360" aria-current={current("/leilao-360")} onClick={() => setOpen(false)}>Leilão 360</a>
         <a href="/solucoes" aria-current={current("/solucoes")} onClick={() => setOpen(false)}>Soluções</a>
         <a href="/sobre" aria-current={current("/sobre")} onClick={() => setOpen(false)}>Sobre</a>
+        <a href="/interativo" onClick={() => setOpen(false)}>Interativo</a>
         <a href="#contato" className="nav-cta" onClick={() => { trackEvent("cta_primary_click", { page: path }); setOpen(false); }}>Solicitar proposta</a>
         <a href={whatsappLink("o projeto desta página")} className="header-whatsapp" aria-label="Falar no WhatsApp" onClick={() => trackEvent("whatsapp_click", { location: "header", page: path, interest: pageInterest(path) })}>WhatsApp</a>
       </nav>
