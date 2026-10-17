@@ -5,6 +5,7 @@ import "@fontsource/manrope/latin-600.css";
 import "@fontsource/manrope/latin-700.css";
 import "@fontsource/manrope/latin-800.css";
 import "./App.css";
+import pageSeo from "./config/seo.json";
 import DroneContent, { DroneFeature } from "./pages/DroneContent";
 import { getCampaignContext, trackEvent } from "./analytics";
 import { CITY, CNPJ, EMAIL, GA4_ID, HARAS_ADDRESS, LEGAL_NAME, MAPS_URL, SITE_NAME, TAGLINE, WHATSAPP_DISPLAY, whatsappLink, whatsappMessageLink } from "./config/site";
@@ -48,7 +49,11 @@ function pageInterest(path = window.location.pathname) {
   return interests[path.replace(/\/+$/, "") || "/"] ?? "Ainda preciso entender a melhor solução";
 }
 
-function usePageMeta(title: string, description: string) {
+function usePageMeta(fallbackTitle: string, fallbackDescription: string) {
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  const configured = pageSeo[path as keyof typeof pageSeo];
+  const title = configured?.title ?? fallbackTitle;
+  const description = configured?.description ?? fallbackDescription;
   useEffect(() => {
     document.title = title;
     const path = window.location.pathname.replace(/\/+$/, "") || "/";
@@ -247,7 +252,7 @@ function ContactForm({ defaultProject = "" }: { defaultProject?: string }) {
         body: JSON.stringify({ ...lead, page: window.location.pathname, utm_source: campaign.source ?? "", utm_medium: campaign.medium ?? "", utm_campaign: campaign.campaign ?? "", website: (form.elements.namedItem("website") as HTMLInputElement | null)?.value ?? "" }),
       });
       if (!response.ok) throw new Error(String(response.status));
-      trackEvent("lead_form_submit", { page: window.location.pathname, interest: lead.project, channel: "email" });
+      trackEvent("lead_form_submit", { page: window.location.pathname, interest: lead.project, channel: "site" });
       setLead({ ...initialLead, project: lead.project });
       setStatus("Recebemos sua solicitação. A equipe AR1 Films responde em breve pelo WhatsApp ou e-mail informado.");
     } catch {
@@ -261,11 +266,11 @@ function ContactForm({ defaultProject = "" }: { defaultProject?: string }) {
   return (
     <form className="lead-form" onSubmit={submit} onFocus={registerStart} aria-label="Solicitação de proposta" aria-describedby="form-status form-privacy">
       <p className="form-heading full"><span>Briefing inicial</span><strong>Conte o essencial. A AR1 organiza o próximo passo.</strong></p>
-      <div className="field"><label htmlFor="name">Nome <span>obrigatório</span></label><input id="name" autoComplete="name" maxLength={80} required value={lead.name} onChange={(event) => update("name", event.target.value)} /></div>
+      <div className="field"><label htmlFor="name">Nome <span>obrigatório</span></label><input id="name" pattern={".*\\S.*"} autoComplete="name" maxLength={80} required value={lead.name} onChange={(event) => update("name", event.target.value)} /></div>
       <div className="field"><label htmlFor="role">Cargo ou função</label><input id="role" autoComplete="organization-title" maxLength={100} value={lead.role} onChange={(event) => update("role", event.target.value)} /></div>
-      <div className="field"><label htmlFor="phone">WhatsApp <span>obrigatório</span></label><input id="phone" type="tel" inputMode="tel" autoComplete="tel" maxLength={24} placeholder="(00) 00000-0000" required value={lead.phone} onChange={(event) => update("phone", event.target.value)} /></div>
+      <div className="field"><label htmlFor="phone">WhatsApp <span>obrigatório</span></label><input id="phone" type="tel" pattern={"\\+?(?:[\\s\\(\\)\\.\\-]*[0-9]){10,15}[\\s\\(\\)\\.\\-]*"} title="Informe um telefone com DDD, entre 10 e 15 dígitos." inputMode="tel" autoComplete="tel" maxLength={24} placeholder="(00) 00000-0000" required value={lead.phone} onChange={(event) => update("phone", event.target.value)} /></div>
       <div className="field"><label htmlFor="email">E-mail</label><input id="email" type="email" inputMode="email" autoComplete="email" maxLength={160} placeholder="voce@empresa.com.br" value={lead.email} onChange={(event) => update("email", event.target.value)} /></div>
-      <div className="field"><label htmlFor="company">Empresa, organização ou projeto <span>obrigatório</span></label><input id="company" autoComplete="organization" maxLength={160} required value={lead.company} onChange={(event) => update("company", event.target.value)} /></div>
+      <div className="field"><label htmlFor="company">Empresa, organização ou projeto <span>obrigatório</span></label><input id="company" pattern={".*\\S.*"} autoComplete="organization" maxLength={160} required value={lead.company} onChange={(event) => update("company", event.target.value)} /></div>
       <div className="field"><label htmlFor="project">Principal interesse <span>obrigatório</span></label><select id="project" required value={lead.project} onChange={(event) => update("project", event.target.value)}><option value="">Selecione</option>{projectOptions.map((project) => <option key={project} value={project}>{project}</option>)}</select></div>
       <div className="field full"><label htmlFor="brief">O que precisa acontecer?</label><textarea id="brief" rows={4} maxLength={1000} value={lead.brief} onChange={(event) => update("brief", event.target.value)} placeholder="Conte o objetivo, o público e a necessidade principal." /></div>
       <div className="field full"><label htmlFor="date">Data prevista, se houver</label><input id="date" type="date" value={lead.date} onChange={(event) => update("date", event.target.value)} /></div>
